@@ -151,7 +151,7 @@ fn snake_can_move(world: &WorldType, target: &Coord) -> bool {
     Item::Food => true,
     _ => {
       println!("{} has {:#?}", target, world[target.y as usize][target.x as usize]);
-      true
+      false
     },
   }
 }
@@ -180,7 +180,7 @@ fn try_move_snake(s: &mut GameState) -> StateTransition {
 
   match try_create_target(old_head, &direction_get_unit_vector(s.snake.direction)) {
     Some(new_head) =>
-      if snake_can_move(s.world, &old_head) {
+      if snake_can_move(s.world, &new_head) {
         println!("old_head:{}; new_head:{}, dir:{:#?}",
           old_head, new_head, s.snake.direction);
         move_snake(s, &new_head);
