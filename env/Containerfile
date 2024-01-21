@@ -1,0 +1,22 @@
+FROM alpine
+
+ENV USER=dev
+
+RUN adduser -D "${USER}" \
+&& mkdir -p "~${USER}/.cargo"
+
+RUN apk add rustup git build-base vim
+
+USER "${USER}"
+
+RUN rustup-init -y
+
+USER root
+
+RUN mkdir /prj && chown "${USER}:${USER}" /prj
+
+USER "${USER}"
+
+WORKDIR "/prj"
+
+VOLUME "/prj"
