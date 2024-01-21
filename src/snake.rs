@@ -2,6 +2,8 @@
 use std::collections::LinkedList;
 use init_array::init_boxed_array;
 
+use rand::Rng;
+
 trait CoordinatePairTrait {}
 
 impl CoordinatePairTrait for i32 {}
@@ -29,7 +31,9 @@ pub const WORLD_DIMENSIONS : Coord = Coord {
 
 const INITIAL_SNAKE_LENGTH : u32 = 6;
 
-#[derive(Debug)]
+const SNAKE_GROWTH_PER_FOOD : i32 = 3;
+
+#[derive(Debug,PartialEq)]
 pub enum Item {
   Nothing,
   SnakeHead,
@@ -46,6 +50,7 @@ pub type WorldType = Box<[
 struct Snake {
   direction : Direction,
   body : LinkedList<Coord>,
+  growing : i32,
 }
 
 // specific values so we can use as array indices
@@ -81,6 +86,7 @@ pub fn snake_game(
     snake: &mut Snake {
       direction: Direction::Up,
       body: LinkedList::new(),
+      growing : 0,
     },
   };
 
@@ -186,21 +192,55 @@ fn try_move_snake(s: &mut GameState) -> StateTransition {
   }
 }
 
+fn drop_new_food(s: &mut GameState) {
+  for attempt in 0..10 {
+    let rnd_x = rand::thread_rng().gen_range(0..WORLD_DIMENSIONS.x) as usize;
+    let rnd_y = rand::thread_rng().gen_range(0..WORLD_DIMENSIONS.y) as usize;
+    if s.world[rnd_y][rnd_x] == Item::Nothing {
+      s.world[rnd_y][rnd_x] = Item::Food;
+      break
+    }
+  }
+}
+
 fn move_snake(s: &mut GameState, new_head: &Coord) {
 
-  let old_tail = s.snake.body.pop_back().unwrap();
-  s.world[old_tail.y as usize][old_tail.x as usize] = Item::Nothing;
+  if s.world[new_head.y as usize][new_head.x as usize] == Item::Food {
+    s.snake.growing += SNAKE_GROWTH_PER_FOOD;
+    drop_new_food(s);
+  }
 
-  let new_tail = s.snake.body.back().unwrap();
-  s.world[new_tail.y as usize][new_tail.x as usize] = Item::SnakeTail;
-
+  // advance the head
   let old_head = s.snake.body.front().unwrap();
   s.world[old_head.y as usize][old_head.x as usize] = Item::SnakeBit;
 
   s.snake.body.push_front(*new_head);
   s.world[new_head.y as usize][new_head.x as usize] = Item::SnakeHead;
 
-  println!("old_tail:{}; new_tail:{}", old_tail, s.snake.body.back().unwrap());
+  if s.snake.growing <= 0 {
+    // bring up the tail by one
+    let old_tail = s.snake.body.pop_back().unwrap();
+    s.world[old_tail.y as usize][old_tail.x as usize] = Item::Nothing;
+
+    let new_tail = s.snake.body.back().unwrap();
+    s.world[new_tail.y as usize][new_tail.x as usize] = Item::SnakeTail;
+
+    if s.snake.growing < 0 {
+      // bring up the tail by one more
+      let old_tail = s.snake.body.pop_back().unwrap();
+      s.world[old_tail.y as usize][old_tail.x as usize] = Item::Nothing;
+
+      let new_tail = s.snake.body.back().unwrap();
+      s.world[new_tail.y as usize][new_tail.x as usize] = Item::SnakeTail;
+
+      s.snake.growing += 1;
+    }
+  } else if s.snake.growing > 0 {
+    // just advance the head, do not bring up the tail
+    s.snake.growing -= 1;
+  }
+
+  println!("new_tail:{}", s.snake.body.back().unwrap());
 }
 
 fn initialize_snake(state: &mut GameState) {
