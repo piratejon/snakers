@@ -273,7 +273,7 @@ fn initialize_snake(s: &mut GameState) {
   s.snake.direction = Direction::Up;
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq,Debug)]
 pub enum InputType {
   Nothing,
   Up,
@@ -294,7 +294,10 @@ fn handle_input(
     d @ InputType::Left =>
       handle_direction(s, input_get_direction(d).unwrap()),
     InputType::Quit => StateTransition::Stop,
-    _ => StateTransition::Continue,
+    k => {
+      println!("handling {:?}", k);
+      return StateTransition::Continue;
+    },
   }
 }
 

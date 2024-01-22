@@ -1,8 +1,9 @@
 use string_builder::Builder;
+use std::time::Duration;
 
 use snake::*;
 
-use crossterm::event::{read, Event, KeyCode, KeyEvent};
+use crossterm::event::{read, poll, Event, KeyCode, KeyEvent};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 
 const WIDTH : u32 = 48;
@@ -13,21 +14,26 @@ fn main() {
 }
 
 fn get_input() -> InputType {
+  let mut input = InputType::Nothing;
   enable_raw_mode().unwrap();
-  let input = match read().unwrap() {
-    Event::Key(KeyEvent {
-      code: KeyCode::Char('q'), ..
-    }) => InputType::Quit,
-    Event::Key(KeyEvent { code: KeyCode::Up, ..  }) => InputType::Up,
-    Event::Key(KeyEvent { code: KeyCode::Right, ..  }) => InputType::Right,
-    Event::Key(KeyEvent { code: KeyCode::Down, ..  }) => InputType::Down,
-    Event::Key(KeyEvent { code: KeyCode::Left, ..  }) => InputType::Left,
-    Event::Key(_) => {
-      // println!("{:?}", event);
-      InputType::Nothing
-    },
-    _ => InputType::Nothing,
-  };
+  // this pol does not work
+  let poll_result = poll(Duration::from_millis(100));
+  if let Ok(_) = poll_result {
+    input = match read().unwrap() {
+      Event::Key(KeyEvent {
+        code: KeyCode::Char('q'), ..
+      }) => InputType::Quit,
+      Event::Key(KeyEvent { code: KeyCode::Up, ..  }) => InputType::Up,
+      Event::Key(KeyEvent { code: KeyCode::Right, ..  }) => InputType::Right,
+      Event::Key(KeyEvent { code: KeyCode::Down, ..  }) => InputType::Down,
+      Event::Key(KeyEvent { code: KeyCode::Left, ..  }) => InputType::Left,
+      Event::Key(_) => {
+        // println!("{:?}", event);
+        InputType::Nothing
+      },
+      _ => InputType::Nothing,
+    };
+  }
   disable_raw_mode().unwrap();
   input
 }
