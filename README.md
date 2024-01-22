@@ -6,8 +6,8 @@ This is a snake game made in rust. I have only tried rust once before and I did 
 
 ## files
 * src/
-** snake.rs - game logic (library)
-** cli.rs - command line driver (binary)
+    * snake.rs - game logic (library)
+    * cli.rs - command line driver (binary)
 * env/
-** build.sh - build the development container
-** run.sh - run the development container
+    * build.sh - build the development container
+    * run.sh - run the development container
