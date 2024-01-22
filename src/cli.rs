@@ -17,7 +17,7 @@ fn get_input() -> InputType {
   let mut input = InputType::Nothing;
   enable_raw_mode().unwrap();
   // this pol does not work
-  let poll_result = poll(Duration::from_millis(100));
+  let poll_result = poll(Duration::from_millis(750));
   if let Ok(_) = poll_result {
     input = match read().unwrap() {
       Event::Key(KeyEvent {
