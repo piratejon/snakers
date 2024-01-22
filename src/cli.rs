@@ -5,8 +5,11 @@ use snake::*;
 use crossterm::event::{read, Event, KeyCode, KeyEvent};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 
+const WIDTH : u32 = 48;
+const HEIGHT : u32 = 18;
+
 fn main() {
-  snake_game(get_input, draw);
+  snake_game(WIDTH, HEIGHT, get_input, draw);
 }
 
 fn get_input() -> InputType {
@@ -29,17 +32,17 @@ fn get_input() -> InputType {
   input
 }
 
-fn draw(world : &WorldType) {
+fn draw(world : &GridType) {
 
-  println!("+{0}+", "-".repeat(WORLD_DIMENSIONS.x as usize));
+  println!("+{0}+", "-".repeat(WIDTH as usize));
 
-  for y in 0..WORLD_DIMENSIONS.y {
+  for y in 0..HEIGHT {
 
-    let mut builder = Builder::new((WORLD_DIMENSIONS.x + 2) as usize);
+    let mut builder = Builder::new((WIDTH + 2) as usize);
 
     builder.append("|");
 
-    for x in 0..WORLD_DIMENSIONS.x {
+    for x in 0..WIDTH {
       match &world[y as usize][x as usize] {
         Item::Nothing  => builder.append(" "),
         Item::Food     => builder.append("O"),
@@ -54,6 +57,6 @@ fn draw(world : &WorldType) {
     println!("{0}", builder.string().unwrap());
   }
 
-  println!("+{0}+", "-".repeat(WORLD_DIMENSIONS.x as usize));
+  println!("+{0}+", "-".repeat(WIDTH as usize));
 }
 
