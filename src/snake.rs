@@ -3,6 +3,11 @@ use std::collections::LinkedList;
 
 use rand::Rng;
 
+pub trait ContextTrait {
+  fn get_input(&self)                   -> InputType;
+  fn draw     (&self, world: &GridType) -> ();
+}
+
 trait CoordinatePairTrait {}
 
 impl CoordinatePairTrait for i32 {}
@@ -22,10 +27,6 @@ impl<T: CoordinatePairTrait + std::fmt::Display> std::fmt::Display for Pair<T> {
 
 type UnitVector = Pair<i32>;
 type Coord = Pair<u32>;
-
-trait SnakeGame<const W: u32, const H: u32> {
-  fn do_something(d: Direction);
-}
 
 const INITIAL_SNAKE_LENGTH : u32 = 6;
 
@@ -81,11 +82,10 @@ enum StateTransition {
   Stop,
 }
 
-pub fn snake_game(
+pub fn snake_game (
   width     : u32,
   height    : u32,
-  get_input : fn()          -> InputType,
-  draw      : fn(&GridType) -> (),
+  ctx       : &mut impl ContextTrait,
 ) {
 
   let mut state = GameState {
@@ -105,9 +105,9 @@ pub fn snake_game(
 
   loop {
 
-    draw(&state.world);
+    ctx.draw(&state.world);
 
-    let input = get_input();
+    let input = ctx.get_input();
 
     match handle_input(input, &mut state) {
       StateTransition::Stop => break,

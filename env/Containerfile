@@ -13,6 +13,8 @@ RUN rustup-init -y
 
 USER root
 
+RUN apk add sdl2-dev
+
 RUN mkdir /prj && chown "${USER}:${USER}" /prj
 
 USER "${USER}"
