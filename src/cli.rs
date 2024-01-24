@@ -18,7 +18,7 @@ struct CliContext {}
 
 impl snake::ContextTrait for CliContext {
 
-  fn get_input(&self) -> InputType {
+  fn get_input(&mut self) -> InputType {
     let mut input = InputType::Nothing;
     enable_raw_mode().unwrap();
     // this pol does not work
@@ -43,7 +43,7 @@ impl snake::ContextTrait for CliContext {
     input
   }
 
-  fn draw(&self, world : &GridType) {
+  fn draw(&mut self, world : &GridType) {
 
     println!("+{0}+", "-".repeat(WIDTH as usize));
 

@@ -4,8 +4,8 @@ use std::collections::LinkedList;
 use rand::Rng;
 
 pub trait ContextTrait {
-  fn get_input(&self)                   -> InputType;
-  fn draw     (&self, world: &GridType) -> ();
+  fn get_input(&mut self)                   -> InputType;
+  fn draw     (&mut self, world: &GridType) -> ();
 }
 
 trait CoordinatePairTrait {}
