@@ -11,7 +11,17 @@ const HEIGHT : u32 = 18;
 
 fn main() {
   let mut ctx: CliContext = CliContext {};
-  snake_game(WIDTH, HEIGHT, &mut ctx);
+  let mut game: SnakeGame<CliContext> = snake_game(WIDTH, HEIGHT, &mut ctx);
+
+  loop  {
+    game.draw();
+    if ! game.handle_input() {
+      break;
+    }
+    if ! game.tick() {
+      break;
+    }
+  }
 }
 
 struct CliContext {}

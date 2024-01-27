@@ -56,6 +56,7 @@ enum Direction {
   Left,
 }
 
+// public since frontends need to iterate and even copy it
 pub type GridType = Vec<Vec<Item>>;
 
 struct GameState<'a> {
@@ -63,6 +64,28 @@ struct GameState<'a> {
   height: u32,
   world: &'a mut GridType,
   snake: &'a mut Snake,
+}
+
+pub trait SnakeGameTrait {
+  fn draw() -> ();
+  fn handle_input() -> bool;
+  fn tick() -> bool;
+}
+
+struct SnakeGame<'a, T: ContextTrait> {
+  ctx: &'a mut T;
+}
+
+impl SnakeGameTrait for SnakeGame {
+
+  fn handle_input() -> bool {
+    ctx.
+    true
+  }
+
+  fn tick() -> bool {
+    self.update_state();
+  }
 }
 
 fn init_grid(width: u32, height: u32) -> Vec<Vec<Item>> {
@@ -86,7 +109,7 @@ pub fn snake_game (
   width     : u32,
   height    : u32,
   ctx       : &mut impl ContextTrait,
-) {
+) -> &mut SnakeGame {
 
   let mut state = GameState {
     width: width,
@@ -105,7 +128,7 @@ pub fn snake_game (
 
   loop {
 
-    ctx.draw(&state.world);
+    // ctx.draw(&state.world);
 
     let input = ctx.get_input();
 
