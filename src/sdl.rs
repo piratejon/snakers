@@ -8,24 +8,26 @@ use sdl2::video::Window;
 use sdl2::keyboard::Keycode;
 use sdl2::rect::{Rect,Point};
 
+use snake::GameState;
 use snake::GridType;
 use snake::InputType;
 use snake::Item;
-use snake::snake_game;
-use snake::ContextTrait;
+use snake::StateTransition;
 
 use std::time::Duration;
 
-const WIDTH_PIXELS : u32 = 1000;
+const WIDTH_PIXELS : u32 = 1200;
 const HEIGHT_PIXELS : u32 = 800;
 
-const GAME_TO_SCREEN_FACTOR : u32 = 20;
+const GAME_TO_SCREEN_FACTOR : u32 = 50;
 
 const WIDTH : u32 = WIDTH_PIXELS / GAME_TO_SCREEN_FACTOR;
 const HEIGHT : u32 = HEIGHT_PIXELS / GAME_TO_SCREEN_FACTOR;
 
 const FPS: f64 = 60.0;
 const FPS_RATE: Duration = Duration::from_nanos(16666667);
+
+const FRAMES_PER_TICK: u32 = 20;
 
 struct SDLContext<'a> {
   color_index: u8,
@@ -77,7 +79,28 @@ fn main() {
   ctx.last_frame_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
   ctx.timer_freq = sdl2::TimerSubsystem::performance_frequency(&ctx.timer);
 
-  snake_game(WIDTH, HEIGHT, &mut ctx);
+
+  let mut game = snake::GameState::new(WIDTH, HEIGHT);
+
+  let mut frame_counter = 1;
+
+  loop {
+    ctx.draw(game.get_world());
+    let input = ctx.get_input();
+    match game.handle_input(input) {
+      StateTransition::Stop => break,
+      _ => (),
+    }
+
+    if (frame_counter % FRAMES_PER_TICK) == 0 {
+      match game.update_state() {
+        StateTransition::Stop => break,
+        _ => (),
+      }
+    }
+
+    frame_counter += 1;
+  }
 }
 
 impl SnakeGameRenderTrait for SDLContext<'_> {
@@ -104,7 +127,7 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
 
 }
 
-impl ContextTrait for SDLContext<'_> {
+impl SDLContext<'_> {
 
   fn draw(&mut self, grid: &snake::GridType) {
 
@@ -137,7 +160,7 @@ impl ContextTrait for SDLContext<'_> {
 
     let time_to_next_frame = FPS_RATE - Duration::from_secs(frame_elapsed / self.timer_freq);
 
-    if true || (self.frame_counter % 600) == 0 {
+    if (self.frame_counter % 600) == 0 {
       println!("frames: {}; FPS: {}; cur_time: {}", self.frame_counter, (self.frame_counter as f64) / ((cur_time - self.start_frame_time) as f64), cur_time);
     }
 

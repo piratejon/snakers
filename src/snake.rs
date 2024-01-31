@@ -117,8 +117,8 @@ impl GameState {
       d @ InputType::Left =>
         handle_direction(self, input_get_direction(d).unwrap()),
       InputType::Quit => StateTransition::Stop,
-      k => {
-        println!("handling {:?}", k);
+      _k => {
+        // println!("handling {:?}", k);
         return StateTransition::Continue;
       },
     }

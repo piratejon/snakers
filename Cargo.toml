@@ -11,9 +11,9 @@ path = "src/snake.rs"
 name = "snakers-cli"
 path = "src/cli.rs"
 
-#[[bin]]
-#name = "snakers-sdl"
-#path = "src/sdl.rs"
+[[bin]]
+name = "snakers-sdl"
+path = "src/sdl.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
