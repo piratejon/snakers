@@ -3,11 +3,6 @@ use std::collections::LinkedList;
 
 use rand::Rng;
 
-pub trait ContextTrait {
-  fn get_input(&mut self)                   -> InputType;
-  fn draw     (&mut self, world: &GridType) -> ();
-}
-
 trait CoordinatePairTrait {}
 
 impl CoordinatePairTrait for i32 {}
@@ -58,11 +53,11 @@ enum Direction {
 
 pub type GridType = Vec<Vec<Item>>;
 
-struct GameState<'a> {
+pub struct GameState {
   width: u32,
   height: u32,
-  world: &'a mut GridType,
-  snake: &'a mut Snake,
+  world: GridType,
+  snake: Snake,
 }
 
 fn init_grid(width: u32, height: u32) -> Vec<Vec<Item>> {
@@ -77,47 +72,60 @@ fn init_grid(width: u32, height: u32) -> Vec<Vec<Item>> {
   return row_vec;
 }
 
-enum StateTransition {
+pub enum StateTransition {
   Continue,
   Stop,
 }
 
-pub fn snake_game (
-  width     : u32,
-  height    : u32,
-  ctx       : &mut impl ContextTrait,
-) {
+impl GameState {
 
-  let mut state = GameState {
-    width: width,
-    height: height,
-    world: &mut init_grid(width, height),
-    snake: &mut Snake {
-      direction: Direction::Up,
-      body: LinkedList::new(),
-      growing : 0,
-    },
-  };
+  pub fn new(
+    width     : u32,
+    height    : u32,
+  ) -> Self {
 
-  state.world[3][3] = Item::Food;
+    let mut state = GameState {
+      width: width,
+      height: height,
+      world: init_grid(width, height),
+      snake: Snake {
+        direction: Direction::Up,
+        body: LinkedList::new(),
+        growing : 0,
+      },
+    };
 
-  initialize_snake(&mut state);
+    initialize_snake(&mut state);
 
-  loop {
+    drop_new_food(&mut state);
 
-    ctx.draw(&state.world);
+    state
+  }
 
-    let input = ctx.get_input();
+  pub fn get_world(&self) -> &GridType {
+    &self.world
+  }
 
-    match handle_input(input, &mut state) {
-      StateTransition::Stop => break,
-      _ => (),
+  pub fn handle_input(
+    &mut self,
+    input : InputType,
+  ) -> StateTransition {
+    match input {
+      d @ InputType::Up |
+      d @ InputType::Right |
+      d @ InputType::Down |
+      d @ InputType::Left =>
+        handle_direction(self, input_get_direction(d).unwrap()),
+      InputType::Quit => StateTransition::Stop,
+      _k => {
+        // println!("handling {:?}", k);
+        return StateTransition::Continue;
+      },
     }
+  }
 
-    match update_state(&mut state) {
-      StateTransition::Stop => break,
-      _ => (),
-    }
+  pub fn update_state(&mut self) -> StateTransition {
+    try_move_snake(self)
   }
 }
 
@@ -147,10 +155,6 @@ fn direction_get_unit_vector(direction: Direction) -> UnitVector {
     Direction::Down => UnitVector { x: 0, y: 1 },
     Direction::Left => UnitVector { x: -1, y: 0 },
   }
-}
-
-fn update_state(state: &mut GameState) -> StateTransition {
-  try_move_snake(state)
 }
 
 fn snake_can_move(world: &GridType, target: &Coord) -> bool {
@@ -193,7 +197,7 @@ fn try_move_snake(s: &mut GameState) -> StateTransition {
 
   match try_create_target(s, old_head, &direction_get_unit_vector(s.snake.direction)) {
     Some(new_head) =>
-      if snake_can_move(s.world, &new_head) {
+      if snake_can_move(&s.world, &new_head) {
         println!("old_head:{}; new_head:{}, dir:{:#?}",
           old_head, new_head, s.snake.direction);
         move_snake(s, &new_head);
@@ -256,6 +260,7 @@ fn move_snake(s: &mut GameState, new_head: &Coord) {
   println!("new_tail:{}", s.snake.body.back().unwrap());
 }
 
+// TODO use direction
 fn initialize_snake(s: &mut GameState) {
   let x = (s.width / 2) as usize;
   let y = (s.height - INITIAL_SNAKE_LENGTH) / 2;
@@ -281,24 +286,6 @@ pub enum InputType {
   Down,
   Left,
   Quit,
-}
-
-fn handle_input(
-  input : InputType,
-  s: &mut GameState,
-) -> StateTransition {
-  match input {
-    d @ InputType::Up |
-    d @ InputType::Right |
-    d @ InputType::Down |
-    d @ InputType::Left =>
-      handle_direction(s, input_get_direction(d).unwrap()),
-    InputType::Quit => StateTransition::Stop,
-    k => {
-      println!("handling {:?}", k);
-      return StateTransition::Continue;
-    },
-  }
 }
 
 fn handle_direction(s: &mut GameState, direction: Direction) -> StateTransition {
