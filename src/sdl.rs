@@ -24,8 +24,8 @@ const GAME_TO_SCREEN_FACTOR : u32 = 50;
 const WIDTH : u32 = WIDTH_PIXELS / GAME_TO_SCREEN_FACTOR;
 const HEIGHT : u32 = HEIGHT_PIXELS / GAME_TO_SCREEN_FACTOR;
 
-const FPS: f64 = 60.0;
-const FPS_RATE: Duration = Duration::from_nanos(16666667);
+const FPS: f64 = 30.0;
+const FPS_RATE: Duration = Duration::from_nanos(((1e9 as f64) / FPS) as u64);
 
 const FRAMES_PER_TICK: u32 = 20;
 
@@ -39,6 +39,8 @@ struct SDLContext<'a> {
   start_frame_time: u64,
   last_frame_time: u64,
   frame_counter: u64,
+
+  // frame_duration_ewma: u64,
 }
 
 trait SnakeGameRenderTrait {
@@ -77,6 +79,7 @@ fn main() {
   };
 
   ctx.last_frame_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
+  ctx.start_frame_time = ctx.last_frame_time;
   ctx.timer_freq = sdl2::TimerSubsystem::performance_frequency(&ctx.timer);
 
 
@@ -160,8 +163,11 @@ impl SDLContext<'_> {
 
     let time_to_next_frame = FPS_RATE - Duration::from_secs(frame_elapsed / self.timer_freq);
 
-    if (self.frame_counter % 600) == 0 {
-      println!("frames: {}; FPS: {}; cur_time: {}", self.frame_counter, (self.frame_counter as f64) / ((cur_time - self.start_frame_time) as f64), cur_time);
+    if (self.frame_counter % 300) == 0 {
+      println!("frames: {}; FPS: {}; cur_time: {}",
+        self.frame_counter,
+        1e9 * ((self.frame_counter as f64) / ((cur_time - self.start_frame_time) as f64)),
+        cur_time);
     }
 
     self.canvas.present();
@@ -178,6 +184,9 @@ impl SDLContext<'_> {
       match event {
         Event::Quit { .. } |
         Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+          return snake::InputType::Quit;
+        },
+        Event::KeyDown { keycode: Some(Keycode::Q), .. } => {
           return snake::InputType::Quit;
         },
         Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
