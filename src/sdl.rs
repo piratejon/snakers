@@ -24,8 +24,8 @@ const GAME_TO_SCREEN_FACTOR : u32 = 50;
 const WIDTH : u32 = WIDTH_PIXELS / GAME_TO_SCREEN_FACTOR;
 const HEIGHT : u32 = HEIGHT_PIXELS / GAME_TO_SCREEN_FACTOR;
 
-const FPS: f64 = 30.0;
-const FPS_RATE: Duration = Duration::from_nanos(((1e9 as f64) / FPS) as u64);
+const FPS: f64 = 15.0;
+const FPS_RATE: Duration = Duration::from_nanos((1_000_000_000.0 / FPS) as u64);
 
 const FRAMES_PER_TICK: u32 = 20;
 
