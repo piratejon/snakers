@@ -177,8 +177,7 @@ fn try_create_target(s: &GameState, a: &Coord, d: &UnitVector) -> Option<Coord> 
         // u32 always >= 0 if checked add succeeds
         if new_y  < s.height {
           let target = Coord {x: new_x, y: new_y};
-          println!("created target {} from {}+{}",
-            target, a, d);
+          // println!("created target {} from {}+{}", target, a, d);
           return Some(target);
         }
       }
@@ -198,8 +197,7 @@ fn try_move_snake(s: &mut GameState) -> StateTransition {
   match try_create_target(s, old_head, &direction_get_unit_vector(s.snake.direction)) {
     Some(new_head) =>
       if snake_can_move(&s.world, &new_head) {
-        println!("old_head:{}; new_head:{}, dir:{:#?}",
-          old_head, new_head, s.snake.direction);
+        // println!("old_head:{}; new_head:{}, dir:{:#?}", old_head, new_head, s.snake.direction);
         move_snake(s, &new_head);
         return StateTransition::Continue;
       } else {
@@ -257,7 +255,7 @@ fn move_snake(s: &mut GameState, new_head: &Coord) {
     s.snake.growing -= 1;
   }
 
-  println!("new_tail:{}", s.snake.body.back().unwrap());
+  // println!("new_tail:{}", s.snake.body.back().unwrap());
 }
 
 // TODO use direction

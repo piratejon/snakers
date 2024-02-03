@@ -36,7 +36,7 @@ struct SDLContext<'a> {
   timer: &'a mut sdl2::TimerSubsystem,
 
   timer_freq: u64,
-  start_frame_time: u64,
+  start_time: u64,
   last_frame_time: u64,
   frame_counter: u64,
 
@@ -73,13 +73,13 @@ fn main() {
     event_pump: &mut sdl_context.event_pump().unwrap(),
     timer: &mut timer.unwrap(),
     timer_freq: 0,
-    start_frame_time: 0,
+    start_time: 0,
     last_frame_time: 0,
     frame_counter: 0,
   };
 
   ctx.last_frame_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
-  ctx.start_frame_time = ctx.last_frame_time;
+  ctx.start_time = ctx.last_frame_time;
   ctx.timer_freq = sdl2::TimerSubsystem::performance_frequency(&ctx.timer);
 
 
@@ -146,28 +146,29 @@ impl SDLContext<'_> {
       game logic down here
       */
 
+    // render the grid
     for y in 0..HEIGHT {
       for x in 0..WIDTH {
         match &grid[y as usize][x as usize] {
           Item::Nothing => (),
           Item::Food => self.draw_food(x, y),
-          Item::SnakeBit | Item::SnakeHead | Item::SnakeTail => self.draw_snake(x, y),
+          Item::SnakeBit |
+          Item::SnakeHead |
+          Item::SnakeTail => self.draw_snake(x, y),
         }
       }
     }
 
     let cur_time : u64 = sdl2::TimerSubsystem::performance_counter(&self.timer);
-    // println!("delta: {}", cur_time - self.last_frame_time);
 
     let frame_elapsed : u64 = cur_time - self.last_frame_time;
 
     let time_to_next_frame = FPS_RATE - Duration::from_secs(frame_elapsed / self.timer_freq);
 
     if (self.frame_counter % 300) == 0 {
-      println!("frames: {}; FPS: {}; cur_time: {}",
+      println!("frames: {}; FPS: {:.02}",
         self.frame_counter,
-        1e9 * ((self.frame_counter as f64) / ((cur_time - self.start_frame_time) as f64)),
-        cur_time);
+        1e9 * ((self.frame_counter as f64) / ((cur_time - self.start_time) as f64)));
     }
 
     self.canvas.present();
