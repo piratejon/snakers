@@ -49,8 +49,8 @@ struct SDLContext<'a> {
 }
 
 trait SnakeGameRenderTrait {
-    fn draw_food(&mut self, x: u32, y: u32);
-    fn draw_snake(&mut self, x: u32, y: u32);
+    fn draw_food(&mut self, at: &(usize, usize));
+    fn draw_snake(&mut self, at: &(usize, usize));
     fn draw_animated_snake(&mut self, game: &snake::GameState);
 }
 
@@ -131,21 +131,21 @@ fn main() {
 }
 
 impl SnakeGameRenderTrait for SDLContext<'_> {
-    fn draw_food(&mut self, x: u32, y: u32) {
+    fn draw_food(&mut self, at: &(usize, usize)) {
         self.canvas.set_draw_color(FOOD_COLOR);
         let _ = self.canvas.fill_rect(Rect::new(
-            ((x * GAME_TO_SCREEN_FACTOR) + 2) as i32,
-            ((y * GAME_TO_SCREEN_FACTOR) + 2) as i32,
+            ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) + 2) as i32,
+            ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) + 2) as i32,
             GAME_TO_SCREEN_FACTOR - 4,
             GAME_TO_SCREEN_FACTOR - 4,
         ));
     }
 
-    fn draw_snake(&mut self, x: u32, y: u32) {
+    fn draw_snake(&mut self, at: &(usize, usize)) {
         self.canvas.set_draw_color(SNAKE_COLOR);
         let _ = self.canvas.fill_rect(Rect::new(
-            ((x * GAME_TO_SCREEN_FACTOR) + 2) as i32,
-            ((y * GAME_TO_SCREEN_FACTOR) + 2) as i32,
+            ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) + 2) as i32,
+            ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) + 2) as i32,
             GAME_TO_SCREEN_FACTOR - 4,
             GAME_TO_SCREEN_FACTOR - 4,
         ));
@@ -160,11 +160,15 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         self.canvas.set_draw_color(SNAKE_COLOR);
         // let mut iter = game.get_snake().body.iter();
         let mut iter = game.get_snake().get_body().iter();
+
         if let Some(first) = iter.next() {
+
             let mut prev = first;
-            self.draw_snake(prev.get_x(), prev.get_y());
+
+            self.draw_snake(&game.game_to_grid(&prev.as_tuple()));
+
             for next in iter {
-                self.draw_snake(next.get_x(), next.get_y());
+                self.draw_snake(&game.game_to_grid(&next.as_tuple()));
                 let diff = prev.unit_vector_to(next);
                 println!("diff: {}", diff);
                 prev = next;
@@ -177,8 +181,7 @@ impl SDLContext<'_> {
     fn draw(&mut self, game: &snake::GameState) {
         // update background
         self.color_index = (self.color_index + 1) % 255;
-        self.canvas
-            .set_draw_color(Color::RGB(self.color_index, 64, 255 - self.color_index));
+        self.canvas.set_draw_color(Color::RGB(self.color_index, 64, 255 - self.color_index));
         self.canvas.clear();
 
         /*
@@ -186,11 +189,11 @@ impl SDLContext<'_> {
         */
 
         // render the grid
-        for y in 0..HEIGHT {
-            for x in 0..WIDTH {
-                match &game.get_world()[y as usize][x as usize] {
+        for y in 0..HEIGHT as usize {
+            for x in 0..WIDTH as usize {
+                match &game.get_world()[y][x] {
                     ItemType::Nothing => (),
-                    ItemType::Food => self.draw_food(x, y),
+                    ItemType::Food => self.draw_food(&(x, y)),
                     // ItemType::SnakeBit | ItemType::SnakeHead | ItemType::SnakeTail => self.draw_snake(x, y),
                     _ => (),
                 }

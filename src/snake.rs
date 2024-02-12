@@ -77,6 +77,10 @@ impl Coord {
             y: y,
         }
     }
+
+    pub fn as_tuple(&self) -> (i32, i32) {
+        (self.x, self.y)
+    }
 }
 
 const INITIAL_SNAKE_LENGTH: i32 = 6;
@@ -182,6 +186,8 @@ impl GameState {
             yrange: make_coordinate_range(height),
         };
 
+        println!("({},{}): x:({},{}); y:({},{})", width, height, state.xrange.0, state.xrange.1, state.yrange.0, state.yrange.1);
+
         state.initialize_snake();
 
         state.drop_new_food();
@@ -234,6 +240,23 @@ impl GameState {
         }
     }
 
+    fn advance_head(&mut self, new_head: &Coord) {
+        // advance the head
+        let old_head = self.snake.body.front().unwrap().clone();
+        self[&old_head] = ItemType::SnakeBit;
+
+        self.snake.body.push_front(*new_head);
+        self[new_head] = ItemType::SnakeHead;
+    }
+
+    fn bring_up_tail(&mut self) {
+        let old_tail = self.snake.body.pop_back().unwrap().clone();
+        self[&old_tail] = ItemType::Nothing;
+
+        let new_tail = self.snake.body.back().unwrap().clone();
+        self[&new_tail] = ItemType::SnakeTail;
+    }
+
     fn move_snake(&mut self, new_head: &Coord) {
 
         if self[new_head] == ItemType::Food {
@@ -241,32 +264,24 @@ impl GameState {
             self.drop_new_food();
         }
 
-        // advance the head
-        let old_head = self.snake.body.front().unwrap();
-        self[old_head] = ItemType::SnakeBit;
-
-        self.snake.body.push_front(*new_head);
-        self[new_head] = ItemType::SnakeHead;
+        self.advance_head(new_head);
 
         if self.snake.growing <= 0 {
-            // bring up the tail by one
-            let old_tail = self.snake.body.pop_back().unwrap();
-            self[&old_tail] = ItemType::Nothing;
 
-            let new_tail = self.snake.body.back().unwrap();
-            self[new_tail] = ItemType::SnakeTail;
+            // bring up the tail by one
+            self.bring_up_tail();
 
             if self.snake.growing < 0 {
                 // bring up the tail by one more
-                let old_tail = self.snake.body.pop_back().unwrap();
-                self[&old_tail] = ItemType::Nothing;
-
-                let new_tail = self.snake.body.back().unwrap();
-                self[new_tail] = ItemType::SnakeTail;
+                self.bring_up_tail();
 
                 self.snake.growing += 1;
             }
         } else if self.snake.growing > 0 {
+            /*
+             * When we are growing, the tail does not need to move up. the head already moved up so
+             * we are done.
+             * */
             self.snake.growing -= 1;
         }
     }
@@ -277,8 +292,8 @@ impl GameState {
                 rand::thread_rng().gen_range(self.xrange.0 ..= self.xrange.1),
                 rand::thread_rng().gen_range(self.yrange.0 ..= self.yrange.1),
             );
-            if self[at] == ItemType::Nothing {
-                self[at] = ItemType::Food;
+            if self[&at] == ItemType::Nothing {
+                self[&at] = ItemType::Food;
                 break;
             }
         }
@@ -287,21 +302,22 @@ impl GameState {
     fn initialize_snake(&mut self) {
         for y in 0..INITIAL_SNAKE_LENGTH {
             let at = Coord { x: 0, y: y };
+            println!("init snake: x: {}, y: {}", at.x, at.y);
             self[&at] = ItemType::SnakeBit;
             self.snake.body.push_back(at);
         }
 
-        self[(0,0)] = ItemType::SnakeHead;
+        self[&(0, 0)] = ItemType::SnakeHead;
 
-        self[(0, INITIAL_SNAKE_LENGTH - 1)] = ItemType::SnakeTail;
+        self[&(0, INITIAL_SNAKE_LENGTH - 1)] = ItemType::SnakeTail;
 
         self.snake.direction = Direction::Up;
     }
 
     fn try_move_snake(&mut self) -> StateTransition {
-        let old_head = self.snake.body.front().unwrap();
+        let old_head = *self.snake.body.front().unwrap();
 
-        match self.try_create_target(old_head, &direction_get_unit_vector(self.snake.direction)) {
+        match self.try_create_target(&old_head, &direction_get_unit_vector(self.snake.direction)) {
             Some(new_head) => {
                 if self.snake_can_move(&new_head) {
                     // println!("old_head:{}; new_head:{}, dir:{:#?}", old_head, new_head, s.snake.direction);
@@ -320,11 +336,12 @@ impl GameState {
         let new_x = a.x + d.x;
         let new_y = a.y + d.y;
 
+        let target = Coord { x: new_x, y: new_y };
+
         if new_x >= self.xrange.0 {
-            if new_x < self.xrange.1 {
+            if new_x <= self.xrange.1 {
                 if new_y >= self.yrange.0 {
-                    if new_y < self.yrange.1 {
-                        let target = Coord { x: new_x, y: new_y };
+                    if new_y <= self.yrange.1 {
                         // println!("created target {} from {}+{}", target, a, d);
                         return Some(target);
                     }
@@ -332,23 +349,31 @@ impl GameState {
             }
         }
 
-        println!("failed to create target from {} and {}", a, d);
+        println!("failed to create target from {} and {}: {}", a, d, target);
 
         None
     }
-}
 
-impl std::ops::Index<(i32, i32)> for GameState {
-    type Output = ItemType;
-
-    fn index(&self, at: (i32, i32)) -> &Self::Output {
-        &self.world[(at.1 - self.yrange.0) as usize][(at.0 - self.xrange.0) as usize]
+    pub fn game_to_grid(&self, at: &(i32, i32)) -> (usize, usize) {
+        let g = ((at.0 - self.xrange.0) as usize, (at.1 - self.yrange.0) as usize);
+        println!("({},{}) -> ({},{})", at.0, at.1, g.0, g.1);
+        return (g.0, g.1);
     }
 }
 
-impl std::ops::IndexMut<(i32, i32)> for GameState {
-    fn index_mut(&mut self, at: (i32, i32)) -> &mut Self::Output {
-        &mut self.world[(at.1 - self.yrange.0) as usize][(at.0 - self.xrange.0) as usize]
+impl std::ops::Index<&(i32, i32)> for GameState {
+    type Output = ItemType;
+
+    fn index(&self, at: &(i32, i32)) -> &Self::Output {
+        let g = self.game_to_grid(&at);
+        return &self.world[g.1][g.0]
+    }
+}
+
+impl std::ops::IndexMut<&(i32, i32)> for GameState {
+    fn index_mut(&mut self, at: &(i32, i32)) -> &mut Self::Output {
+        let g = self.game_to_grid(&at);
+        &mut self.world[g.1][g.0]
     }
 }
 
@@ -356,13 +381,13 @@ impl std::ops::Index<&Coord> for GameState {
     type Output = ItemType;
 
     fn index(&self, at: &Coord) -> &Self::Output {
-        &self[(at.x, at.y)]
+        &self[&(at.x, at.y)]
     }
 }
 
 impl std::ops::IndexMut<&Coord> for GameState {
     fn index_mut(&mut self, at: &Coord) -> &mut Self::Output {
-        &mut self[(at.x, at.y)]
+        &mut self[&(at.x, at.y)]
     }
 }
 

@@ -63,11 +63,11 @@ fn draw(world : &GridType) {
 
     for x in 0..WIDTH {
       match &world[y as usize][x as usize] {
-        Item::Nothing  => builder.append(" "),
-        Item::Food     => builder.append("O"),
-        Item::SnakeBit => builder.append("S"),
-        Item::SnakeHead => builder.append("%"),
-        Item::SnakeTail => builder.append("*"),
+        ItemType::Nothing  => builder.append(" "),
+        ItemType::Food     => builder.append("O"),
+        ItemType::SnakeBit => builder.append("S"),
+        ItemType::SnakeHead => builder.append("%"),
+        ItemType::SnakeTail => builder.append("*"),
       }
     }
 
