@@ -1,18 +1,14 @@
-extern crate sdl2;
-
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use sdl2::rect::{Point, Rect};
-use sdl2::render::Canvas;
-use sdl2::video::Window;
-use sdl2::EventPump;
+use sdl2::rect::Rect;
+// use sdl2::render::Canvas;
+// use sdl2::video::Window;
+// use sdl2::EventPump;
 
-use snake::GameState;
-use snake::GridType;
-use snake::InputType;
-use snake::Item;
+use snake::ItemType;
 use snake::StateTransition;
+// use snake::UnitVector;
 
 use std::time::Duration;
 
@@ -34,6 +30,9 @@ const TICKS_PER_SECOND: f64 = 1.5;
 const TICK_DURATION: Duration =
     Duration::from_nanos((1_000_000_000.0 / TICKS_PER_SECOND) as u64);
 
+const FOOD_COLOR: Color = Color::RGB(200, 200, 20);
+const SNAKE_COLOR: Color = Color::RGB(0, 200, 50);
+
 struct SDLContext<'a> {
     color_index: u8,
     event_pump: &'a mut sdl2::EventPump,
@@ -52,6 +51,7 @@ struct SDLContext<'a> {
 trait SnakeGameRenderTrait {
     fn draw_food(&mut self, x: u32, y: u32);
     fn draw_snake(&mut self, x: u32, y: u32);
+    fn draw_animated_snake(&mut self, game: &snake::GameState);
 }
 
 fn main() {
@@ -98,7 +98,7 @@ fn main() {
     let mut last_tick_frame_number = ctx.frame_counter;
 
     loop {
-        ctx.draw(game.get_world());
+        ctx.draw(&game);
         let input = ctx.get_input();
         match game.handle_input(input) {
             StateTransition::Stop => break,
@@ -132,7 +132,7 @@ fn main() {
 
 impl SnakeGameRenderTrait for SDLContext<'_> {
     fn draw_food(&mut self, x: u32, y: u32) {
-        self.canvas.set_draw_color(Color::RGB(200, 200, 20));
+        self.canvas.set_draw_color(FOOD_COLOR);
         let _ = self.canvas.fill_rect(Rect::new(
             ((x * GAME_TO_SCREEN_FACTOR) + 2) as i32,
             ((y * GAME_TO_SCREEN_FACTOR) + 2) as i32,
@@ -142,7 +142,7 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
     }
 
     fn draw_snake(&mut self, x: u32, y: u32) {
-        self.canvas.set_draw_color(Color::RGB(0, 200, 50));
+        self.canvas.set_draw_color(SNAKE_COLOR);
         let _ = self.canvas.fill_rect(Rect::new(
             ((x * GAME_TO_SCREEN_FACTOR) + 2) as i32,
             ((y * GAME_TO_SCREEN_FACTOR) + 2) as i32,
@@ -150,16 +150,36 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
             GAME_TO_SCREEN_FACTOR - 4,
         ));
     }
+
+    /*
+     * draw the snake by iterating the linked list
+     * the first one is drawn first, then the rest
+     * are drawn connecting to the previous
+     * */
+    fn draw_animated_snake(&mut self, game: &snake::GameState) {
+        self.canvas.set_draw_color(SNAKE_COLOR);
+        // let mut iter = game.get_snake().body.iter();
+        let mut iter = game.get_snake().get_body().iter();
+        if let Some(first) = iter.next() {
+            let mut prev = first;
+            self.draw_snake(prev.get_x(), prev.get_y());
+            for next in iter {
+                self.draw_snake(next.get_x(), next.get_y());
+                let diff = prev.unit_vector_to(next);
+                println!("diff: {}", diff);
+                prev = next;
+            }
+        }
+    }
 }
 
 impl SDLContext<'_> {
-    fn draw(&mut self, grid: &snake::GridType) {
+    fn draw(&mut self, game: &snake::GameState) {
         // update background
         self.color_index = (self.color_index + 1) % 255;
         self.canvas
             .set_draw_color(Color::RGB(self.color_index, 64, 255 - self.color_index));
         self.canvas.clear();
-        // ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
 
         /*
         game logic down here
@@ -168,13 +188,16 @@ impl SDLContext<'_> {
         // render the grid
         for y in 0..HEIGHT {
             for x in 0..WIDTH {
-                match &grid[y as usize][x as usize] {
-                    Item::Nothing => (),
-                    Item::Food => self.draw_food(x, y),
-                    Item::SnakeBit | Item::SnakeHead | Item::SnakeTail => self.draw_snake(x, y),
+                match &game.get_world()[y as usize][x as usize] {
+                    ItemType::Nothing => (),
+                    ItemType::Food => self.draw_food(x, y),
+                    // ItemType::SnakeBit | ItemType::SnakeHead | ItemType::SnakeTail => self.draw_snake(x, y),
+                    _ => (),
                 }
             }
         }
+
+        self.draw_animated_snake(&game);
 
         self.canvas.present();
 

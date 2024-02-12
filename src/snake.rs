@@ -1,300 +1,422 @@
-
 use std::collections::LinkedList;
+
+use std::ops::Sub;
 
 use rand::Rng;
 
-trait CoordinatePairTrait {}
-
-impl CoordinatePairTrait for i32 {}
-impl CoordinatePairTrait for u32 {}
-
-#[derive(Copy,Clone,Debug)]
-struct Pair<T: CoordinatePairTrait> {
-  x : T,
-  y : T,
+#[derive(Copy, Clone)]
+pub struct Pair<T: Copy> {
+    x: T,
+    y: T,
 }
 
-impl<T: CoordinatePairTrait + std::fmt::Display> std::fmt::Display for Pair<T> {
-  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "({:2},{:2})", self.x, self.y)
-  }
+impl<T> Sub<&Pair<T>> for &Pair<T>
+where
+    T: Sub<Output=T> + Copy,
+{
+    type Output = Pair<T>;
+
+    fn sub(self, rhs: &Pair<T>) -> Pair<T> {
+        return Pair::<T> {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
+    }
 }
 
-type UnitVector = Pair<i32>;
-type Coord = Pair<u32>;
+impl<T> Pair<T>
+where
+    T: Copy + std::cmp::PartialOrd + std::ops::Sub<Output=T>,
+{
+    pub fn get_x(&self) -> T {
+        self.x
+    }
 
-const INITIAL_SNAKE_LENGTH : u32 = 6;
+    pub fn get_y(&self) -> T {
+        self.y
+    }
 
-const SNAKE_GROWTH_PER_FOOD : i32 = 3;
+    pub fn unit_vector_to(&self, other: &Self) -> Pair<T> {
+        self - other
+    }
 
-#[derive(Debug,PartialEq)]
-pub enum Item {
-  Nothing,
-  SnakeHead,
-  SnakeBit,
-  SnakeTail,
-  Food,
+    pub fn direction_to(&self, other: &Self) -> Option<Direction> {
+        if self.y == other.y {
+            if self.x < other.x {
+                return Some(Direction::Right);
+            } else if self.x > other.x {
+                return Some(Direction::Left);
+            }
+        } else if self.x == other.x {
+            if self.y < other.y {
+                return Some(Direction::Down);
+            } else if self.y > other.y {
+                return Some(Direction::Up);
+            }
+        }
+
+        return None;
+    }
 }
 
-struct Snake {
-  direction : Direction,
-  body : LinkedList<Coord>,
-  growing : i32,
+impl<T> std::fmt::Display for Pair<T>
+where
+    T: std::fmt::Display + Copy,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "({:2},{:2})", self.x, self.y)
+    }
+}
+
+type Coord = Pair<i32>;
+
+impl Coord {
+    pub fn new(x: i32, y: i32) -> Coord {
+        Coord {
+            x: x,
+            y: y,
+        }
+    }
+}
+
+const INITIAL_SNAKE_LENGTH: i32 = 6;
+const SNAKE_GROWTH_PER_FOOD: i32 = 3;
+
+#[derive(Debug, PartialEq)]
+pub enum ItemType {
+    Nothing,
+    SnakeHead,
+    SnakeBit,
+    SnakeTail,
+    Food,
+}
+
+pub struct SnakeType {
+    direction: Direction,
+    body: LinkedList<Coord>,
+    growing: i32,
+}
+
+impl SnakeType {
+    pub fn get_direction(&self) -> Direction {
+        self.direction
+    }
+    pub fn get_body(&self) -> &LinkedList<Coord> {
+        &(self.body)
+    }
+    pub fn get_growing(&self) -> i32 {
+        self.growing
+    }
 }
 
 // specific values so we can use as array indices
-#[derive(PartialEq,Copy,Clone,Debug)]
-enum Direction {
-  Up,
-  Right,
-  Down,
-  Left,
+#[derive(PartialEq, Copy, Clone, Debug)]
+pub enum Direction {
+    Up,
+    Right,
+    Down,
+    Left,
 }
 
-pub type GridType = Vec<Vec<Item>>;
+pub type GridType = Vec<Vec<ItemType>>;
 
 pub struct GameState {
-  width: u32,
-  height: u32,
-  world: GridType,
-  snake: Snake,
+    // grid size
+    width: u32,
+    height: u32,
+
+    world: GridType,
+    snake: SnakeType,
+
+    // logical game state bounds
+    xrange: (i32, i32),
+    yrange: (i32, i32),
 }
 
-fn init_grid(width: u32, height: u32) -> Vec<Vec<Item>> {
-  let mut row_vec: Vec<Vec<Item>> = Vec::with_capacity(height as usize);
-  for _ in 0..row_vec.capacity() {
-    let mut row = Vec::with_capacity(width as usize);
-    for _ in 0..width {
-      row.push(Item::Nothing);
+fn init_grid(width: u32, height: u32) -> Vec<Vec<ItemType>> {
+    let mut row_vec: Vec<Vec<ItemType>> = Vec::with_capacity(height as usize);
+    for _ in 0..row_vec.capacity() {
+        let mut row = Vec::with_capacity(width as usize);
+        for _ in 0..width {
+            row.push(ItemType::Nothing);
+        }
+        row_vec.push(row);
     }
-    row_vec.push(row);
-  }
-  return row_vec;
+    return row_vec;
 }
 
 pub enum StateTransition {
-  Continue,
-  Stop,
+    Continue,
+    Stop,
+}
+
+fn make_coordinate_range(size: u32) -> (i32, i32) {
+    match size % 2 {
+        0 => {
+            let half = (size / 2) as i32;
+            return (-half, half - 1);
+        },
+        _ => {
+            let half = ((size - 1) / 2) as i32;
+            return (-half, half);
+        }
+    }
 }
 
 impl GameState {
 
-  pub fn new(
-    width     : u32,
-    height    : u32,
-  ) -> Self {
+    pub fn new(width: u32, height: u32) -> Self {
+        let mut state = GameState {
+            width: width,
+            height: height,
 
-    let mut state = GameState {
-      width: width,
-      height: height,
-      world: init_grid(width, height),
-      snake: Snake {
-        direction: Direction::Up,
-        body: LinkedList::new(),
-        growing : 0,
-      },
-    };
+            world: init_grid(width, height),
 
-    initialize_snake(&mut state);
+            snake: SnakeType {
+                direction: Direction::Up,
+                body: LinkedList::new(),
+                growing: 0,
+            },
 
-    drop_new_food(&mut state);
+            xrange: make_coordinate_range(width),
+            yrange: make_coordinate_range(height),
+        };
 
-    state
-  }
+        state.initialize_snake();
 
-  pub fn get_world(&self) -> &GridType {
-    &self.world
-  }
+        state.drop_new_food();
 
-  pub fn handle_input(
-    &mut self,
-    input : InputType,
-  ) -> StateTransition {
-    match input {
-      d @ InputType::Up |
-      d @ InputType::Right |
-      d @ InputType::Down |
-      d @ InputType::Left =>
-        handle_direction(self, input_get_direction(d).unwrap()),
-      InputType::Quit => StateTransition::Stop,
-      _k => {
-        // println!("handling {:?}", k);
-        return StateTransition::Continue;
-      },
+        state
     }
-  }
 
-  pub fn update_state(&mut self) -> StateTransition {
-    try_move_snake(self)
-  }
+    pub fn get_world(&self) -> &GridType {
+        &self.world
+    }
+
+    pub fn get_snake(&self) -> &SnakeType {
+        &self.snake
+    }
+
+    pub fn get_width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn get_height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn handle_input(&mut self, input: InputType) -> StateTransition {
+        match input {
+            d @ InputType::Up
+            | d @ InputType::Right
+            | d @ InputType::Down
+            | d @ InputType::Left => handle_direction(self, input_get_direction(d).unwrap()),
+            InputType::Quit => StateTransition::Stop,
+            _k => {
+                // println!("handling {:?}", k);
+                return StateTransition::Continue;
+            }
+        }
+    }
+
+    pub fn update_state(&mut self) -> StateTransition {
+        self.try_move_snake()
+    }
+
+    fn snake_can_move(&self, target: &Coord) -> bool {
+        match self[target] {
+            ItemType::Nothing => true,
+            ItemType::Food => true,
+            _ => {
+                println!("{} has {:#?}", target, self[target]);
+                false
+            }
+        }
+    }
+
+    fn move_snake(&mut self, new_head: &Coord) {
+
+        if self[new_head] == ItemType::Food {
+            self.snake.growing += SNAKE_GROWTH_PER_FOOD;
+            self.drop_new_food();
+        }
+
+        // advance the head
+        let old_head = self.snake.body.front().unwrap();
+        self[old_head] = ItemType::SnakeBit;
+
+        self.snake.body.push_front(*new_head);
+        self[new_head] = ItemType::SnakeHead;
+
+        if self.snake.growing <= 0 {
+            // bring up the tail by one
+            let old_tail = self.snake.body.pop_back().unwrap();
+            self[&old_tail] = ItemType::Nothing;
+
+            let new_tail = self.snake.body.back().unwrap();
+            self[new_tail] = ItemType::SnakeTail;
+
+            if self.snake.growing < 0 {
+                // bring up the tail by one more
+                let old_tail = self.snake.body.pop_back().unwrap();
+                self[&old_tail] = ItemType::Nothing;
+
+                let new_tail = self.snake.body.back().unwrap();
+                self[new_tail] = ItemType::SnakeTail;
+
+                self.snake.growing += 1;
+            }
+        } else if self.snake.growing > 0 {
+            self.snake.growing -= 1;
+        }
+    }
+
+    fn drop_new_food(&mut self) {
+        for _ in 0..100 {
+            let at = (
+                rand::thread_rng().gen_range(self.xrange.0 ..= self.xrange.1),
+                rand::thread_rng().gen_range(self.yrange.0 ..= self.yrange.1),
+            );
+            if self[at] == ItemType::Nothing {
+                self[at] = ItemType::Food;
+                break;
+            }
+        }
+    }
+
+    fn initialize_snake(&mut self) {
+        for y in 0..INITIAL_SNAKE_LENGTH {
+            let at = Coord { x: 0, y: y };
+            self[&at] = ItemType::SnakeBit;
+            self.snake.body.push_back(at);
+        }
+
+        self[(0,0)] = ItemType::SnakeHead;
+
+        self[(0, INITIAL_SNAKE_LENGTH - 1)] = ItemType::SnakeTail;
+
+        self.snake.direction = Direction::Up;
+    }
+
+    fn try_move_snake(&mut self) -> StateTransition {
+        let old_head = self.snake.body.front().unwrap();
+
+        match self.try_create_target(old_head, &direction_get_unit_vector(self.snake.direction)) {
+            Some(new_head) => {
+                if self.snake_can_move(&new_head) {
+                    // println!("old_head:{}; new_head:{}, dir:{:#?}", old_head, new_head, s.snake.direction);
+                    self.move_snake(&new_head);
+                    return StateTransition::Continue;
+                } else {
+                    return StateTransition::Stop;
+                }
+            }
+            None => StateTransition::Stop,
+        }
+    }
+
+    fn try_create_target(&self, a: &Coord, d: &Coord) -> Option<Coord> {
+
+        let new_x = a.x + d.x;
+        let new_y = a.y + d.y;
+
+        if new_x >= self.xrange.0 {
+            if new_x < self.xrange.1 {
+                if new_y >= self.yrange.0 {
+                    if new_y < self.yrange.1 {
+                        let target = Coord { x: new_x, y: new_y };
+                        // println!("created target {} from {}+{}", target, a, d);
+                        return Some(target);
+                    }
+                }
+            }
+        }
+
+        println!("failed to create target from {} and {}", a, d);
+
+        None
+    }
+}
+
+impl std::ops::Index<(i32, i32)> for GameState {
+    type Output = ItemType;
+
+    fn index(&self, at: (i32, i32)) -> &Self::Output {
+        &self.world[(at.1 - self.yrange.0) as usize][(at.0 - self.xrange.0) as usize]
+    }
+}
+
+impl std::ops::IndexMut<(i32, i32)> for GameState {
+    fn index_mut(&mut self, at: (i32, i32)) -> &mut Self::Output {
+        &mut self.world[(at.1 - self.yrange.0) as usize][(at.0 - self.xrange.0) as usize]
+    }
+}
+
+impl std::ops::Index<&Coord> for GameState {
+    type Output = ItemType;
+
+    fn index(&self, at: &Coord) -> &Self::Output {
+        &self[(at.x, at.y)]
+    }
+}
+
+impl std::ops::IndexMut<&Coord> for GameState {
+    fn index_mut(&mut self, at: &Coord) -> &mut Self::Output {
+        &mut self[(at.x, at.y)]
+    }
 }
 
 fn input_get_direction(input: InputType) -> Option<Direction> {
-  match input {
-    InputType::Up => Some(Direction::Up),
-    InputType::Right => Some(Direction::Right),
-    InputType::Down => Some(Direction::Down),
-    InputType::Left => Some(Direction::Left),
-    _ => None,
-  }
+    match input {
+        InputType::Up => Some(Direction::Up),
+        InputType::Right => Some(Direction::Right),
+        InputType::Down => Some(Direction::Down),
+        InputType::Left => Some(Direction::Left),
+        _ => None,
+    }
 }
 
 fn direction_get_disallowed(direction: &Direction) -> Direction {
-  match direction {
-    Direction::Up => Direction::Down,
-    Direction::Right => Direction::Left,
-    Direction::Down => Direction::Up,
-    Direction::Left => Direction::Right,
-  }
-}
-
-fn direction_get_unit_vector(direction: Direction) -> UnitVector {
-  match direction {
-    Direction::Up => UnitVector { x: 0, y: -1 },
-    Direction::Right => UnitVector { x: 1, y: 0 },
-    Direction::Down => UnitVector { x: 0, y: 1 },
-    Direction::Left => UnitVector { x: -1, y: 0 },
-  }
-}
-
-fn snake_can_move(world: &GridType, target: &Coord) -> bool {
-  match world[target.y as usize][target.x as usize] {
-    Item::Nothing => true,
-    Item::Food => true,
-    _ => {
-      println!("{} has {:#?}", target, world[target.y as usize][target.x as usize]);
-      false
-    },
-  }
-}
-
-fn try_create_target(s: &GameState, a: &Coord, d: &UnitVector) -> Option<Coord> {
-
-  if let Some(new_x) = a.x.checked_add_signed(d.x) {
-    // u32 always >= 0 if checked add succeeds
-    if new_x < s.width {
-      if let Some(new_y) = a.y.checked_add_signed(d.y) {
-        // u32 always >= 0 if checked add succeeds
-        if new_y  < s.height {
-          let target = Coord {x: new_x, y: new_y};
-          // println!("created target {} from {}+{}", target, a, d);
-          return Some(target);
-        }
-      }
+    match direction {
+        Direction::Up => Direction::Down,
+        Direction::Right => Direction::Left,
+        Direction::Down => Direction::Up,
+        Direction::Left => Direction::Right,
     }
-  }
-
-  println!("failed to create target from {} and {}",
-    a, d
-  );
-
-  None
 }
 
-fn try_move_snake(s: &mut GameState) -> StateTransition {
-  let old_head = s.snake.body.front().unwrap();
-
-  match try_create_target(s, old_head, &direction_get_unit_vector(s.snake.direction)) {
-    Some(new_head) =>
-      if snake_can_move(&s.world, &new_head) {
-        // println!("old_head:{}; new_head:{}, dir:{:#?}", old_head, new_head, s.snake.direction);
-        move_snake(s, &new_head);
-        return StateTransition::Continue;
-      } else {
-        return StateTransition::Stop;
-      }
-    None => StateTransition::Stop,
-  }
-}
-
-fn drop_new_food(s: &mut GameState) {
-  for _ in 0..100 {
-    let rnd_x = rand::thread_rng().gen_range(0..s.width) as usize;
-    let rnd_y = rand::thread_rng().gen_range(0..s.height) as usize;
-    if s.world[rnd_y][rnd_x] == Item::Nothing {
-      s.world[rnd_y][rnd_x] = Item::Food;
-      break
+fn direction_get_unit_vector(direction: Direction) -> Coord {
+    match direction {
+        Direction::Up => Coord::new(0, -1),
+        Direction::Right => Coord::new(1, 0),
+        Direction::Down => Coord::new(0, 1),
+        Direction::Left => Coord::new(-1, 0),
     }
-  }
-}
-
-fn move_snake(s: &mut GameState, new_head: &Coord) {
-
-  if s.world[new_head.y as usize][new_head.x as usize] == Item::Food {
-    s.snake.growing += SNAKE_GROWTH_PER_FOOD;
-    drop_new_food(s);
-  }
-
-  // advance the head
-  let old_head = s.snake.body.front().unwrap();
-  s.world[old_head.y as usize][old_head.x as usize] = Item::SnakeBit;
-
-  s.snake.body.push_front(*new_head);
-  s.world[new_head.y as usize][new_head.x as usize] = Item::SnakeHead;
-
-  if s.snake.growing <= 0 {
-    // bring up the tail by one
-    let old_tail = s.snake.body.pop_back().unwrap();
-    s.world[old_tail.y as usize][old_tail.x as usize] = Item::Nothing;
-
-    let new_tail = s.snake.body.back().unwrap();
-    s.world[new_tail.y as usize][new_tail.x as usize] = Item::SnakeTail;
-
-    if s.snake.growing < 0 {
-      // bring up the tail by one more
-      let old_tail = s.snake.body.pop_back().unwrap();
-      s.world[old_tail.y as usize][old_tail.x as usize] = Item::Nothing;
-
-      let new_tail = s.snake.body.back().unwrap();
-      s.world[new_tail.y as usize][new_tail.x as usize] = Item::SnakeTail;
-
-      s.snake.growing += 1;
-    }
-  } else if s.snake.growing > 0 {
-    // just advance the head, do not bring up the tail
-    s.snake.growing -= 1;
-  }
-
-  // println!("new_tail:{}", s.snake.body.back().unwrap());
 }
 
 // TODO use direction
-fn initialize_snake(s: &mut GameState) {
-  let x = (s.width / 2) as usize;
-  let y = (s.height - INITIAL_SNAKE_LENGTH) / 2;
-
-  s.world[y as usize][x] = Item::SnakeHead;
-  s.snake.body.push_back(Coord{x:x as u32,y:y});
-
-  for y in y+1..(y+(INITIAL_SNAKE_LENGTH as u32)-1) {
-    s.world[y as usize][x] = Item::SnakeBit;
-    s.snake.body.push_back(Coord{x:x as u32,y:y});
-  }
-  s.world[(y+INITIAL_SNAKE_LENGTH-1) as usize][x] = Item::SnakeTail;
-  s.snake.body.push_back(Coord{x:x as u32,y:(y+INITIAL_SNAKE_LENGTH-1)});
-
-  s.snake.direction = Direction::Up;
-}
-
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq, Debug)]
 pub enum InputType {
-  Nothing,
-  Up,
-  Right,
-  Down,
-  Left,
-  Quit,
+    Nothing,
+    Up,
+    Right,
+    Down,
+    Left,
+    Quit,
 }
 
 fn handle_direction(s: &mut GameState, direction: Direction) -> StateTransition {
-  if s.snake.direction != direction_get_disallowed(&direction) {
-    println!("changing direction from {:?} to {:?}",
-      s.snake.direction, direction);
-    s.snake.direction = direction;
-  } else {
-    println!("not changing direction from {:?} to {:?}",
-      s.snake.direction, direction);
-  }
-  StateTransition::Continue
+    if s.snake.direction != direction_get_disallowed(&direction) {
+        println!(
+            "changing direction from {:?} to {:?}",
+            s.snake.direction, direction
+        );
+        s.snake.direction = direction;
+    } else {
+        println!(
+            "not changing direction from {:?} to {:?}",
+            s.snake.direction, direction
+        );
+    }
+    StateTransition::Continue
 }
-
