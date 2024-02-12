@@ -8,7 +8,7 @@ use sdl2::rect::Rect;
 
 use snake::ItemType;
 use snake::StateTransition;
-// use snake::UnitVector;
+use snake::Direction;
 
 use std::time::Duration;
 
@@ -16,6 +16,8 @@ const WIDTH_PIXELS: u32 = 1200;
 const HEIGHT_PIXELS: u32 = 800;
 
 const GAME_TO_SCREEN_FACTOR: u32 = 50;
+
+const CELL_MARGIN: u32 = 4;
 
 const WIDTH: u32 = WIDTH_PIXELS / GAME_TO_SCREEN_FACTOR;
 const HEIGHT: u32 = HEIGHT_PIXELS / GAME_TO_SCREEN_FACTOR;
@@ -32,6 +34,7 @@ const TICK_DURATION: Duration =
 
 const FOOD_COLOR: Color = Color::RGB(200, 200, 20);
 const SNAKE_COLOR: Color = Color::RGB(0, 200, 50);
+const SNAKE_COLOR_DARK: Color = Color::RGB(0, 150, 80);
 
 struct SDLContext<'a> {
     color_index: u8,
@@ -52,6 +55,7 @@ trait SnakeGameRenderTrait {
     fn draw_food(&mut self, at: &(usize, usize));
     fn draw_snake(&mut self, at: &(usize, usize));
     fn draw_animated_snake(&mut self, game: &snake::GameState);
+    fn connect_snake_bits(&mut self, game: &snake::GameState, prev: &snake::Coord, next: &snake::Coord);
 }
 
 fn main() {
@@ -134,20 +138,20 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
     fn draw_food(&mut self, at: &(usize, usize)) {
         self.canvas.set_draw_color(FOOD_COLOR);
         let _ = self.canvas.fill_rect(Rect::new(
-            ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) + 2) as i32,
-            ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) + 2) as i32,
-            GAME_TO_SCREEN_FACTOR - 4,
-            GAME_TO_SCREEN_FACTOR - 4,
+            ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) + CELL_MARGIN) as i32,
+            ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) + CELL_MARGIN) as i32,
+            GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+            GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
         ));
     }
 
     fn draw_snake(&mut self, at: &(usize, usize)) {
         self.canvas.set_draw_color(SNAKE_COLOR);
         let _ = self.canvas.fill_rect(Rect::new(
-            ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) + 2) as i32,
-            ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) + 2) as i32,
-            GAME_TO_SCREEN_FACTOR - 4,
-            GAME_TO_SCREEN_FACTOR - 4,
+            ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) + CELL_MARGIN) as i32,
+            ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) + CELL_MARGIN) as i32,
+            GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+            GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
         ));
     }
 
@@ -169,10 +173,64 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
 
             for next in iter {
                 self.draw_snake(&game.game_to_grid(&next.as_tuple()));
-                let diff = prev.unit_vector_to(next);
-                println!("diff: {}", diff);
+                self.connect_snake_bits(game, prev, next);
                 prev = next;
             }
+        }
+    }
+
+    fn connect_snake_bits(&mut self, game: &snake::GameState, prev: &snake::Coord, next: &snake::Coord) {
+        // self.canvas.set_draw_color(SNAKE_COLOR_DARK);
+        self.canvas.set_draw_color(Color::RGB(0,0,0));
+
+        let p = game.game_to_grid(&prev.as_tuple());
+        let n = game.game_to_grid(&next.as_tuple());
+
+        let GF: i32 = GAME_TO_SCREEN_FACTOR as i32;
+        let CM: i32 = CELL_MARGIN as i32;
+        let CM2: u32 = CM as u32 * 2;
+
+        let cx: i32 = (p.0 as i32 * GF);
+        let cy: i32 = (p.1 as i32 * GF);
+
+        if let Some(dir) = next.direction_to(prev) {
+            let xys = match dir {
+                Direction::Up => (
+                    cx + CM,
+                    cy - CM as i32 + GF as i32,
+                    GF as u32 - CM2,
+                    CM2,
+                ),
+                Direction::Down => (
+                    cx + CM,
+                    cy - CM as i32,
+                    GF as u32 - CM2,
+                    CM2,
+                ),
+                Direction::Left  => (
+                    cx - CM as i32 + GF as i32,
+                    cy + CM,
+                    CM2,
+                    GF as u32 - CM2,
+                ),
+                Direction::Right => (
+                    cx - CM as i32,
+                    cy + CM,
+                    CM2,
+                    GF as u32 - CM2,
+                ),
+                _ => {
+                    println!("no dir: {} -> {}", prev, next);
+                    (0, 0, 0, 0)
+                }
+            };
+
+            let _ = self.canvas.fill_rect(Rect::new(
+                    xys.0,
+                    xys.1,
+                    xys.2,
+                    xys.3,
+            ));
         }
     }
 }
@@ -181,7 +239,8 @@ impl SDLContext<'_> {
     fn draw(&mut self, game: &snake::GameState) {
         // update background
         self.color_index = (self.color_index + 1) % 255;
-        self.canvas.set_draw_color(Color::RGB(self.color_index, 64, 255 - self.color_index));
+        // self.canvas.set_draw_color(Color::RGB(self.color_index, 64, 255 - self.color_index));
+        self.canvas.set_draw_color(Color::RGB(255,255,255));
         self.canvas.clear();
 
         /*

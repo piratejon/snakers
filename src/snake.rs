@@ -68,7 +68,7 @@ where
     }
 }
 
-type Coord = Pair<i32>;
+pub type Coord = Pair<i32>;
 
 impl Coord {
     pub fn new(x: i32, y: i32) -> Coord {
