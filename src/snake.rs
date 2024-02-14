@@ -132,6 +132,8 @@ pub struct GameState {
     // logical game state bounds
     xrange: (i32, i32),
     yrange: (i32, i32),
+
+    pending_input: InputType,
 }
 
 fn init_grid(width: u32, height: u32) -> Vec<Vec<ItemType>> {
@@ -180,6 +182,8 @@ impl GameState {
 
             xrange: make_coordinate_range(width),
             yrange: make_coordinate_range(height),
+
+            pending_input: InputType::Nothing,
         };
 
         println!(
@@ -211,21 +215,38 @@ impl GameState {
     }
 
     pub fn handle_input(&mut self, input: InputType) -> StateTransition {
+
         match input {
-            d @ InputType::Up
-            | d @ InputType::Right
-            | d @ InputType::Down
-            | d @ InputType::Left => handle_direction(self, input_get_direction(d).unwrap()),
             InputType::Quit => StateTransition::Stop,
-            _k => {
+            InputType::Nothing => StateTransition::Continue,
+            _ => {
+                self.pending_input = input;
                 // println!("handling {:?}", k);
                 return StateTransition::Continue;
-            }
+            },
         }
     }
 
     pub fn update_state(&mut self) -> StateTransition {
-        self.try_move_snake()
+        // apply the held keypress
+        match self.process_input() {
+            StateTransition::Continue => self.try_move_snake(),
+            s => s,
+        }
+    }
+
+    fn process_input(&mut self) -> StateTransition {
+        match self.pending_input {
+            d @ InputType::Up
+            | d @ InputType::Right
+            | d @ InputType::Down
+            | d @ InputType::Left => {
+                self.pending_input = InputType::Nothing;
+                return self.handle_direction(input_get_direction(d).unwrap())
+            },
+            InputType::Quit => StateTransition::Stop,
+            _ => StateTransition::Continue,
+        }
     }
 
     fn snake_can_move(&self, target: &Coord) -> bool {
@@ -358,6 +379,22 @@ impl GameState {
         println!("({},{}) -> ({},{})", at.0, at.1, g.0, g.1);
         return (g.0, g.1);
     }
+
+    fn handle_direction(&mut self, direction: Direction) -> StateTransition {
+        if self.snake.direction != direction_get_disallowed(&direction) {
+            println!(
+                "changing direction from {:?} to {:?}",
+                self.snake.direction, direction
+            );
+            self.snake.direction = direction;
+        } else {
+            println!(
+                "not changing direction from {:?} to {:?}",
+                self.snake.direction, direction
+            );
+        }
+        StateTransition::Continue
+    }
 }
 
 impl std::ops::Index<&(i32, i32)> for GameState {
@@ -419,7 +456,7 @@ fn direction_get_unit_vector(direction: Direction) -> Coord {
 }
 
 // TODO use direction
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug,Copy,Clone)]
 pub enum InputType {
     Nothing,
     Up,
@@ -429,18 +466,4 @@ pub enum InputType {
     Quit,
 }
 
-fn handle_direction(s: &mut GameState, direction: Direction) -> StateTransition {
-    if s.snake.direction != direction_get_disallowed(&direction) {
-        println!(
-            "changing direction from {:?} to {:?}",
-            s.snake.direction, direction
-        );
-        s.snake.direction = direction;
-    } else {
-        println!(
-            "not changing direction from {:?} to {:?}",
-            s.snake.direction, direction
-        );
-    }
-    StateTransition::Continue
-}
+
