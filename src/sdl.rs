@@ -6,9 +6,9 @@ use sdl2::rect::Rect;
 // use sdl2::video::Window;
 // use sdl2::EventPump;
 
+use snake::Direction;
 use snake::ItemType;
 use snake::StateTransition;
-use snake::Direction;
 
 use std::time::Duration;
 
@@ -23,18 +23,16 @@ const WIDTH: u32 = WIDTH_PIXELS / GAME_TO_SCREEN_FACTOR;
 const HEIGHT: u32 = HEIGHT_PIXELS / GAME_TO_SCREEN_FACTOR;
 
 const FRAMES_PER_SECOND: f64 = 30.0;
-const FRAME_DURATION: Duration =
-    Duration::from_nanos((1_000_000_000.0 / FRAMES_PER_SECOND) as u64);
+const FRAME_DURATION: Duration = Duration::from_nanos((1_000_000_000.0 / FRAMES_PER_SECOND) as u64);
 
 const RATE_LIMITED: bool = true;
 
 const TICKS_PER_SECOND: f64 = 1.5;
-const TICK_DURATION: Duration =
-    Duration::from_nanos((1_000_000_000.0 / TICKS_PER_SECOND) as u64);
+const TICK_DURATION: Duration = Duration::from_nanos((1_000_000_000.0 / TICKS_PER_SECOND) as u64);
 
 const FOOD_COLOR: Color = Color::RGB(200, 200, 20);
 const SNAKE_COLOR: Color = Color::RGB(0, 200, 50);
-const SNAKE_COLOR_DARK: Color = Color::RGB(0, 150, 80);
+const SNAKE_COLOR_DARK: Color = Color::RGB(0, 150, 60);
 
 struct SDLContext<'a> {
     color_index: u8,
@@ -45,7 +43,7 @@ struct SDLContext<'a> {
     timer_freq: u64,
     start_time: u64,
     last_frame_time: u64,
-    last_tick_time:  u64,
+    last_tick_time: u64,
     frame_counter: u64,
     tick_counter: u64,
     // frame_duration_ewma: u64,
@@ -55,7 +53,12 @@ trait SnakeGameRenderTrait {
     fn draw_food(&mut self, at: &(usize, usize));
     fn draw_snake(&mut self, at: &(usize, usize));
     fn draw_animated_snake(&mut self, game: &snake::GameState);
-    fn connect_snake_bits(&mut self, game: &snake::GameState, prev: &snake::Coord, next: &snake::Coord);
+    fn connect_snake_bits(
+        &mut self,
+        game: &snake::GameState,
+        prev: &snake::Coord,
+        next: &snake::Coord,
+    );
 }
 
 fn main() {
@@ -112,11 +115,11 @@ fn main() {
         let cur_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
 
         if Duration::from_nanos(cur_time - ctx.last_tick_time) >= TICK_DURATION {
-
             println!(
                 "frames: {}; Tick FPS: {:.02}; Avg FPS: {:.02}",
                 ctx.frame_counter,
-                1e9 * (((ctx.frame_counter - last_tick_frame_number) as f64) / ((cur_time - ctx.last_tick_time) as f64)),
+                1e9 * (((ctx.frame_counter - last_tick_frame_number) as f64)
+                    / ((cur_time - ctx.last_tick_time) as f64)),
                 1e9 * ((ctx.frame_counter as f64) / ((cur_time - ctx.start_time) as f64)),
             );
 
@@ -166,7 +169,6 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         let mut iter = game.get_snake().get_body().iter();
 
         if let Some(first) = iter.next() {
-
             let mut prev = first;
 
             self.draw_snake(&game.game_to_grid(&prev.as_tuple()));
@@ -179,9 +181,13 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         }
     }
 
-    fn connect_snake_bits(&mut self, game: &snake::GameState, prev: &snake::Coord, next: &snake::Coord) {
-        // self.canvas.set_draw_color(SNAKE_COLOR_DARK);
-        self.canvas.set_draw_color(Color::RGB(0,0,0));
+    fn connect_snake_bits(
+        &mut self,
+        game: &snake::GameState,
+        prev: &snake::Coord,
+        next: &snake::Coord,
+    ) {
+        self.canvas.set_draw_color(SNAKE_COLOR_DARK);
 
         let p = game.game_to_grid(&prev.as_tuple());
         let n = game.game_to_grid(&next.as_tuple());
@@ -195,42 +201,17 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
 
         if let Some(dir) = next.direction_to(prev) {
             let xys = match dir {
-                Direction::Up => (
-                    cx + CM,
-                    cy - CM as i32 + GF as i32,
-                    GF as u32 - CM2,
-                    CM2,
-                ),
-                Direction::Down => (
-                    cx + CM,
-                    cy - CM as i32,
-                    GF as u32 - CM2,
-                    CM2,
-                ),
-                Direction::Left  => (
-                    cx - CM as i32 + GF as i32,
-                    cy + CM,
-                    CM2,
-                    GF as u32 - CM2,
-                ),
-                Direction::Right => (
-                    cx - CM as i32,
-                    cy + CM,
-                    CM2,
-                    GF as u32 - CM2,
-                ),
+                Direction::Up => (cx + CM, cy - CM + GF as i32, GF as u32 - CM2, CM2),
+                Direction::Down => (cx + CM, cy - CM, GF as u32 - CM2, CM2),
+                Direction::Left => (cx - CM + GF as i32, cy + CM, CM2, GF as u32 - CM2),
+                Direction::Right => (cx - CM, cy + CM, CM2, GF as u32 - CM2),
                 _ => {
                     println!("no dir: {} -> {}", prev, next);
                     (0, 0, 0, 0)
                 }
             };
 
-            let _ = self.canvas.fill_rect(Rect::new(
-                    xys.0,
-                    xys.1,
-                    xys.2,
-                    xys.3,
-            ));
+            let _ = self.canvas.fill_rect(Rect::new(xys.0, xys.1, xys.2, xys.3));
         }
     }
 }
@@ -240,7 +221,7 @@ impl SDLContext<'_> {
         // update background
         self.color_index = (self.color_index + 1) % 255;
         // self.canvas.set_draw_color(Color::RGB(self.color_index, 64, 255 - self.color_index));
-        self.canvas.set_draw_color(Color::RGB(255,255,255));
+        self.canvas.set_draw_color(Color::RGB(255, 255, 255));
         self.canvas.clear();
 
         /*

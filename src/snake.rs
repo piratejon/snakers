@@ -12,7 +12,7 @@ pub struct Pair<T: Copy> {
 
 impl<T> Sub<&Pair<T>> for &Pair<T>
 where
-    T: Sub<Output=T> + Copy,
+    T: Sub<Output = T> + Copy,
 {
     type Output = Pair<T>;
 
@@ -20,13 +20,13 @@ where
         return Pair::<T> {
             x: self.x - rhs.x,
             y: self.y - rhs.y,
-        }
+        };
     }
 }
 
 impl<T> Pair<T>
 where
-    T: Copy + std::cmp::PartialOrd + std::ops::Sub<Output=T>,
+    T: Copy + std::cmp::PartialOrd + std::ops::Sub<Output = T>,
 {
     pub fn get_x(&self) -> T {
         self.x
@@ -72,10 +72,7 @@ pub type Coord = Pair<i32>;
 
 impl Coord {
     pub fn new(x: i32, y: i32) -> Coord {
-        Coord {
-            x: x,
-            y: y,
-        }
+        Coord { x: x, y: y }
     }
 
     pub fn as_tuple(&self) -> (i32, i32) {
@@ -159,7 +156,7 @@ fn make_coordinate_range(size: u32) -> (i32, i32) {
         0 => {
             let half = (size / 2) as i32;
             return (-half, half - 1);
-        },
+        }
         _ => {
             let half = ((size - 1) / 2) as i32;
             return (-half, half);
@@ -168,7 +165,6 @@ fn make_coordinate_range(size: u32) -> (i32, i32) {
 }
 
 impl GameState {
-
     pub fn new(width: u32, height: u32) -> Self {
         let mut state = GameState {
             width: width,
@@ -186,7 +182,10 @@ impl GameState {
             yrange: make_coordinate_range(height),
         };
 
-        println!("({},{}): x:({},{}); y:({},{})", width, height, state.xrange.0, state.xrange.1, state.yrange.0, state.yrange.1);
+        println!(
+            "({},{}): x:({},{}); y:({},{})",
+            width, height, state.xrange.0, state.xrange.1, state.yrange.0, state.yrange.1
+        );
 
         state.initialize_snake();
 
@@ -258,7 +257,6 @@ impl GameState {
     }
 
     fn move_snake(&mut self, new_head: &Coord) {
-
         if self[new_head] == ItemType::Food {
             self.snake.growing += SNAKE_GROWTH_PER_FOOD;
             self.drop_new_food();
@@ -267,7 +265,6 @@ impl GameState {
         self.advance_head(new_head);
 
         if self.snake.growing <= 0 {
-
             // bring up the tail by one
             self.bring_up_tail();
 
@@ -289,8 +286,8 @@ impl GameState {
     fn drop_new_food(&mut self) {
         for _ in 0..100 {
             let at = (
-                rand::thread_rng().gen_range(self.xrange.0 ..= self.xrange.1),
-                rand::thread_rng().gen_range(self.yrange.0 ..= self.yrange.1),
+                rand::thread_rng().gen_range(self.xrange.0..=self.xrange.1),
+                rand::thread_rng().gen_range(self.yrange.0..=self.yrange.1),
             );
             if self[&at] == ItemType::Nothing {
                 self[&at] = ItemType::Food;
@@ -332,7 +329,6 @@ impl GameState {
     }
 
     fn try_create_target(&self, a: &Coord, d: &Coord) -> Option<Coord> {
-
         let new_x = a.x + d.x;
         let new_y = a.y + d.y;
 
@@ -355,7 +351,10 @@ impl GameState {
     }
 
     pub fn game_to_grid(&self, at: &(i32, i32)) -> (usize, usize) {
-        let g = ((at.0 - self.xrange.0) as usize, (at.1 - self.yrange.0) as usize);
+        let g = (
+            (at.0 - self.xrange.0) as usize,
+            (at.1 - self.yrange.0) as usize,
+        );
         println!("({},{}) -> ({},{})", at.0, at.1, g.0, g.1);
         return (g.0, g.1);
     }
@@ -366,7 +365,7 @@ impl std::ops::Index<&(i32, i32)> for GameState {
 
     fn index(&self, at: &(i32, i32)) -> &Self::Output {
         let g = self.game_to_grid(&at);
-        return &self.world[g.1][g.0]
+        return &self.world[g.1][g.0];
     }
 }
 
