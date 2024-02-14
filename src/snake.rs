@@ -376,7 +376,7 @@ impl GameState {
             (at.0 - self.xrange.0) as usize,
             (at.1 - self.yrange.0) as usize,
         );
-        println!("({},{}) -> ({},{})", at.0, at.1, g.0, g.1);
+        // println!("({},{}) -> ({},{})", at.0, at.1, g.0, g.1);
         return (g.0, g.1);
     }
 
@@ -446,7 +446,7 @@ fn direction_get_disallowed(direction: &Direction) -> Direction {
     }
 }
 
-fn direction_get_unit_vector(direction: Direction) -> Coord {
+pub fn direction_get_unit_vector(direction: Direction) -> Coord {
     match direction {
         Direction::Up => Coord::new(0, -1),
         Direction::Right => Coord::new(1, 0),

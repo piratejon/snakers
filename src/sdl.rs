@@ -47,6 +47,7 @@ struct SDLContext<'a> {
     frame_counter: u64,
     tick_counter: u64,
     // frame_duration_ewma: u64,
+    frame_percent: f64,
 }
 
 trait SnakeGameRenderTrait {
@@ -58,6 +59,17 @@ trait SnakeGameRenderTrait {
         game: &snake::GameState,
         prev: &snake::Coord,
         next: &snake::Coord,
+    );
+    fn draw_animated_snake_head(
+        &mut self,
+        game: &snake::GameState,
+        prev: &snake::Coord,
+    );
+    fn draw_animated_snake_bit(
+        &mut self,
+        game: &snake::GameState,
+        at: &snake::Coord,
+        from: &snake::Direction,
     );
 }
 
@@ -92,6 +104,7 @@ fn main() {
         last_tick_time: 0,
         frame_counter: 0,
         tick_counter: 0,
+        frame_percent: 0.0,
     };
 
     ctx.last_frame_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
@@ -106,7 +119,9 @@ fn main() {
 
     loop {
         ctx.draw(&game);
+
         let input = ctx.get_input();
+
         match game.handle_input(input) {
             StateTransition::Stop => break,
             _ => (),
@@ -114,7 +129,9 @@ fn main() {
 
         let cur_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
 
-        if Duration::from_nanos(cur_time - ctx.last_tick_time) >= TICK_DURATION {
+        ctx.frame_percent = ((cur_time - ctx.last_tick_time) as f64) / Duration::as_nanos(&TICK_DURATION) as f64;
+
+        if ctx.frame_percent >= 1.0 {
             println!(
                 "frames: {}; Tick FPS: {:.02}; Avg FPS: {:.02}",
                 ctx.frame_counter,
@@ -138,6 +155,7 @@ fn main() {
 }
 
 impl SnakeGameRenderTrait for SDLContext<'_> {
+
     fn draw_food(&mut self, at: &(usize, usize)) {
         self.canvas.set_draw_color(FOOD_COLOR);
         let _ = self.canvas.fill_rect(Rect::new(
@@ -165,20 +183,106 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
      * */
     fn draw_animated_snake(&mut self, game: &snake::GameState) {
         self.canvas.set_draw_color(SNAKE_COLOR);
-        // let mut iter = game.get_snake().body.iter();
+
         let mut iter = game.get_snake().get_body().iter();
 
         if let Some(first) = iter.next() {
             let mut prev = first;
 
-            self.draw_snake(&game.game_to_grid(&prev.as_tuple()));
+            self.draw_animated_snake_head(game, prev);
 
             for next in iter {
-                self.draw_snake(&game.game_to_grid(&next.as_tuple()));
-                self.connect_snake_bits(game, prev, next);
+                // self.draw_animated_snake_bit(&game.game_to_grid(&next.as_tuple()));
+                self.draw_animated_snake_bit(game, prev, &next.direction_to(prev).unwrap());
+                // self.connect_snake_bits(game, prev, next);
                 prev = next;
             }
         }
+    }
+
+    fn draw_animated_snake_head(
+        &mut self,
+        game: &snake::GameState,
+        prev: &snake::Coord
+    ) {
+        // self.draw_snake(&game.game_to_grid(&prev.as_tuple()))
+        // let uv = snake::direction_get_unit_vector(game.get_snake().get_direction());
+        let at: (usize, usize) = game.game_to_grid(&prev.as_tuple());
+
+        let partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * self.frame_percent) as i32;
+        let one_minus_partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * (1.0 - self.frame_percent)) as i32 + 1;
+
+        let rect = match game.get_snake().get_direction() {
+            snake::Direction::Up => Rect::new(
+                ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32) + one_minus_partial,
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+                partial as u32,
+            ),
+            snake::Direction::Down => Rect::new( // ok
+                ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+                partial as u32,
+            ),
+            snake::Direction::Right => Rect::new(
+                ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                partial as u32,
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+            ),
+            snake::Direction::Left => Rect::new(
+                ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32) + one_minus_partial,
+                ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                partial as u32,
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+            ),
+        };
+
+        let _ = self.canvas.fill_rect(rect);
+    }
+
+    fn draw_animated_snake_bit(
+        &mut self,
+        game: &snake::GameState,
+        at: &snake::Coord,
+        from: &snake::Direction
+    ) {
+        // self.draw_snake(&game.game_to_grid(&next.as_tuple()))
+
+        let at: (usize, usize) = game.game_to_grid(&at.as_tuple());
+
+        let partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * self.frame_percent) as i32;
+        let one_minus_partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * (1.0 - self.frame_percent)) as i32 + 1;
+
+        let rect = match from {
+            snake::Direction::Up => Rect::new(
+                ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32) + one_minus_partial,
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+            ),
+            snake::Direction::Down => Rect::new( // ok
+                ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32) + partial,
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+            ),
+            snake::Direction::Right => Rect::new(
+                ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32) + partial,
+                ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+            ),
+            snake::Direction::Left => Rect::new(
+                ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32) + one_minus_partial,
+                ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32),
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+            ),
+        };
+
+        let _ = self.canvas.fill_rect(rect);
     }
 
     fn connect_snake_bits(
@@ -190,14 +294,13 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         self.canvas.set_draw_color(SNAKE_COLOR_DARK);
 
         let p = game.game_to_grid(&prev.as_tuple());
-        let n = game.game_to_grid(&next.as_tuple());
 
         let GF: i32 = GAME_TO_SCREEN_FACTOR as i32;
         let CM: i32 = CELL_MARGIN as i32;
         let CM2: u32 = CM as u32 * 2;
 
-        let cx: i32 = (p.0 as i32 * GF);
-        let cy: i32 = (p.1 as i32 * GF);
+        let cx: i32 = p.0 as i32 * GF;
+        let cy: i32 = p.1 as i32 * GF;
 
         if let Some(dir) = next.direction_to(prev) {
             let xys = match dir {
@@ -205,10 +308,6 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
                 Direction::Down => (cx + CM, cy - CM, GF as u32 - CM2, CM2),
                 Direction::Left => (cx - CM + GF as i32, cy + CM, CM2, GF as u32 - CM2),
                 Direction::Right => (cx - CM, cy + CM, CM2, GF as u32 - CM2),
-                _ => {
-                    println!("no dir: {} -> {}", prev, next);
-                    (0, 0, 0, 0)
-                }
             };
 
             let _ = self.canvas.fill_rect(Rect::new(xys.0, xys.1, xys.2, xys.3));
