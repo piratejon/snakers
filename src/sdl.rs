@@ -2,6 +2,7 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
+use sdl2::gfx::primitives::DrawRenderer;
 // use sdl2::render::Canvas;
 // use sdl2::video::Window;
 // use sdl2::EventPump;
@@ -209,6 +210,15 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         // let uv = snake::direction_get_unit_vector(game.get_snake().get_direction());
         let at: (usize, usize) = game.game_to_grid(&prev.as_tuple());
 
+        self.canvas.arc(
+            ((at.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32) as i16,
+            ((at.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32) as i16,
+            (GAME_TO_SCREEN_FACTOR - CELL_MARGIN) as i16 / 2,
+            180,
+            0,
+            SNAKE_COLOR);
+
+        /*
         let partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * self.frame_percent) as i32;
         let one_minus_partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * (1.0 - self.frame_percent)) as i32 + 1;
 
@@ -240,6 +250,7 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         };
 
         let _ = self.canvas.fill_rect(rect);
+        */
     }
 
     fn draw_animated_snake_bit(
