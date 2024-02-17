@@ -25,4 +25,4 @@ string-builder = "0.2.0"
 [dependencies.sdl2]
 version = "0.36.0"
 default-features = false
-features = ["ttf"]
+features = ["ttf", "gfx"]

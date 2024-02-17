@@ -4,10 +4,10 @@ use std::ops::Sub;
 
 use rand::Rng;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Pair<T: Copy> {
-    x: T,
-    y: T,
+    pub x: T,
+    pub y: T,
 }
 
 impl<T> Sub<&Pair<T>> for &Pair<T>
@@ -80,8 +80,8 @@ impl Coord {
     }
 }
 
-const INITIAL_SNAKE_LENGTH: i32 = 6;
-const SNAKE_GROWTH_PER_FOOD: i32 = 3;
+const INITIAL_SNAKE_LENGTH: i32 = 8;
+const SNAKE_GROWTH_PER_FOOD: i32 = 1;
 
 #[derive(Debug, PartialEq)]
 pub enum ItemType {
@@ -92,9 +92,22 @@ pub enum ItemType {
     Food,
 }
 
+#[derive(Copy,Clone,Debug)]
+pub struct CoordWithDirection {
+    pub dir_next: Option<Direction>,
+    pub coord: Coord,
+    pub dir_prev: Option<Direction>,
+}
+
+impl CoordWithDirection {
+    pub fn direction_to(&self, other: &Self) -> Option<Direction> {
+        self.coord.direction_to(&other.coord)
+    }
+}
+
 pub struct SnakeType {
     direction: Direction,
-    body: LinkedList<Coord>,
+    body: LinkedList<CoordWithDirection>,
     growing: i32,
 }
 
@@ -102,7 +115,7 @@ impl SnakeType {
     pub fn get_direction(&self) -> Direction {
         self.direction
     }
-    pub fn get_body(&self) -> &LinkedList<Coord> {
+    pub fn get_body(&self) -> &LinkedList<CoordWithDirection> {
         &(self.body)
     }
     pub fn get_growing(&self) -> i32 {
@@ -117,6 +130,52 @@ pub enum Direction {
     Right,
     Down,
     Left,
+}
+
+const ROTATE_UP: ((i32, i32), (i32, i32)) = ((1, 0), (0, 1));
+const ROTATE_LEFT: ((i32, i32), (i32, i32)) = ((0, 1), (-1, 0));
+const ROTATE_DOWN: ((i32, i32), (i32, i32)) = ((-1, 0), (0, -1));
+const ROTATE_RIGHT: ((i32, i32), (i32, i32)) = ((0, -1), (1, 0));
+
+impl Direction {
+    pub fn rotation_matrix(&self) -> &((i32, i32), (i32, i32)) {
+        match self {
+            &Direction::Up => &ROTATE_UP,
+            &Direction::Right => &ROTATE_RIGHT,
+            &Direction::Down => &ROTATE_DOWN,
+            &Direction::Left => &ROTATE_LEFT,
+        }
+    }
+
+    pub fn rotate(&self, p: &Coord) -> Coord {
+        let rot = self.rotation_matrix();
+        return Coord {
+            x: (p.x * rot.0.0) + (p.y * rot.0.1),
+            y: (p.x * rot.1.0) + (p.y * rot.1.1),
+        }
+    }
+
+    pub fn get_opposite(&self) -> Direction {
+        match self {
+            Direction::Up => Direction::Down,
+            Direction::Right => Direction::Left,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
+        }
+    }
+
+    fn get_disallowed(&self) -> Direction {
+        self.get_opposite()
+    }
+
+    pub fn direction_get_unit_vector(&self) -> Coord {
+        match self {
+            Direction::Up => Coord::new(0, -1),
+            Direction::Right => Coord::new(1, 0),
+            Direction::Down => Coord::new(0, 1),
+            Direction::Left => Coord::new(-1, 0),
+        }
+    }
 }
 
 pub type GridType = Vec<Vec<ItemType>>;
@@ -249,36 +308,40 @@ impl GameState {
         }
     }
 
-    fn snake_can_move(&self, target: &Coord) -> bool {
-        match self[target] {
+    fn snake_can_move(&self, target: &CoordWithDirection) -> bool {
+        match self[&target.coord] {
             ItemType::Nothing => true,
             ItemType::Food => true,
             _ => {
-                println!("{} has {:#?}", target, self[target]);
+                println!("{:#?} has {:#?}", target, self[&target.coord]);
                 false
             }
         }
     }
 
-    fn advance_head(&mut self, new_head: &Coord) {
+    fn advance_head(&mut self, new_head: &CoordWithDirection) {
         // advance the head
-        let old_head = self.snake.body.front().unwrap().clone();
-        self[&old_head] = ItemType::SnakeBit;
+        let mut old_head = self.snake.body.front_mut().unwrap();
+        old_head.dir_next = Some(new_head.dir_prev.expect("head has elements behind it").get_opposite());
+        let coord = old_head.coord.clone();
+        self[&coord] = ItemType::SnakeBit;
 
         self.snake.body.push_front(*new_head);
-        self[new_head] = ItemType::SnakeHead;
+        self[&new_head.coord] = ItemType::SnakeHead;
     }
 
     fn bring_up_tail(&mut self) {
         let old_tail = self.snake.body.pop_back().unwrap().clone();
-        self[&old_tail] = ItemType::Nothing;
+        self[&old_tail.coord] = ItemType::Nothing;
 
-        let new_tail = self.snake.body.back().unwrap().clone();
-        self[&new_tail] = ItemType::SnakeTail;
+        let new_tail: &mut CoordWithDirection = self.snake.body.back_mut().unwrap();
+        let coord = new_tail.coord.clone();
+        new_tail.dir_prev = None;
+        self[&coord] = ItemType::SnakeTail;
     }
 
-    fn move_snake(&mut self, new_head: &Coord) {
-        if self[new_head] == ItemType::Food {
+    fn move_snake(&mut self, new_head: &CoordWithDirection) {
+        if self[&new_head.coord] == ItemType::Food {
             self.snake.growing += SNAKE_GROWTH_PER_FOOD;
             self.drop_new_food();
         }
@@ -320,22 +383,43 @@ impl GameState {
     fn initialize_snake(&mut self) {
         for y in 0..INITIAL_SNAKE_LENGTH {
             let at = Coord { x: 0, y: y };
+
             println!("init snake: x: {}, y: {}", at.x, at.y);
-            self[&at] = ItemType::SnakeBit;
-            self.snake.body.push_back(at);
+
+            let dir_next: Option<Direction> = Some(Direction::Up);
+            let mut dir_prev: Option<Direction> = Some(Direction::Down);
+
+            if y == 0 {
+                self[&at] = ItemType::SnakeHead;
+                self.snake.direction = Direction::Up;
+            } else if y < (INITIAL_SNAKE_LENGTH - 1) {
+                self[&at] = ItemType::SnakeBit;
+            } else {
+                self[&at] = ItemType::SnakeTail;
+                dir_prev = None;
+            }
+
+            self.snake.body.push_back(CoordWithDirection {
+                dir_next: dir_next,
+                coord: at,
+                dir_prev: dir_prev,
+            });
         }
+    }
 
-        self[&(0, 0)] = ItemType::SnakeHead;
-
-        self[&(0, INITIAL_SNAKE_LENGTH - 1)] = ItemType::SnakeTail;
-
-        self.snake.direction = Direction::Up;
+    fn print_snake(&self) {
+        for s in self.snake.body.iter() {
+            println!("{:?}:{}:{:?}", s.dir_next, s.coord, s.dir_prev);
+        }
     }
 
     fn try_move_snake(&mut self) -> StateTransition {
-        let old_head = *self.snake.body.front().unwrap();
 
-        match self.try_create_target(&old_head, &direction_get_unit_vector(self.snake.direction)) {
+        // self.print_snake();
+
+        let old_head = self.snake.body.front().unwrap();
+
+        match self.try_create_target(&old_head, &self.snake.direction) {
             Some(new_head) => {
                 if self.snake_can_move(&new_head) {
                     // println!("old_head:{}; new_head:{}, dir:{:#?}", old_head, new_head, s.snake.direction);
@@ -349,9 +433,12 @@ impl GameState {
         }
     }
 
-    fn try_create_target(&self, a: &Coord, d: &Coord) -> Option<Coord> {
-        let new_x = a.x + d.x;
-        let new_y = a.y + d.y;
+    fn try_create_target(&self, a: &CoordWithDirection, d: &Direction) -> Option<CoordWithDirection> {
+
+        let uv = d.direction_get_unit_vector();
+
+        let new_x = a.coord.x + uv.x;
+        let new_y = a.coord.y + uv.y;
 
         let target = Coord { x: new_x, y: new_y };
 
@@ -359,19 +446,31 @@ impl GameState {
             if new_x <= self.xrange.1 {
                 if new_y >= self.yrange.0 {
                     if new_y <= self.yrange.1 {
-                        // println!("created target {} from {}+{}", target, a, d);
-                        return Some(target);
+                        let out = CoordWithDirection {
+                            dir_next: Some(*d),
+                            coord: target,
+                            dir_prev: Some(d.get_opposite()),
+                        };
+                        println!("created target {:?} from {:?}+{:?}", target, a, d);
+                        return Some(out);
                     }
                 }
             }
         }
 
-        println!("failed to create target from {} and {}: {}", a, d, target);
+        println!("failed to create target from {:?} and {:?}: {}", a, d, target);
 
         None
     }
 
-    pub fn game_to_grid(&self, at: &(i32, i32)) -> (usize, usize) {
+    pub fn game_to_grid(&self, at: &Coord) -> Coord {
+        Coord {
+            x: at.x - self.xrange.0,
+            y: at.y - self.yrange.0,
+        }
+    }
+
+    pub fn game_to_grid_tuple(&self, at: &(i32, i32)) -> (usize, usize) {
         let g = (
             (at.0 - self.xrange.0) as usize,
             (at.1 - self.yrange.0) as usize,
@@ -381,7 +480,7 @@ impl GameState {
     }
 
     fn handle_direction(&mut self, direction: Direction) -> StateTransition {
-        if self.snake.direction != direction_get_disallowed(&direction) {
+        if self.snake.direction != direction.get_disallowed() {
             println!(
                 "changing direction from {:?} to {:?}",
                 self.snake.direction, direction
@@ -401,14 +500,14 @@ impl std::ops::Index<&(i32, i32)> for GameState {
     type Output = ItemType;
 
     fn index(&self, at: &(i32, i32)) -> &Self::Output {
-        let g = self.game_to_grid(&at);
+        let g = self.game_to_grid_tuple(&at);
         return &self.world[g.1][g.0];
     }
 }
 
 impl std::ops::IndexMut<&(i32, i32)> for GameState {
     fn index_mut(&mut self, at: &(i32, i32)) -> &mut Self::Output {
-        let g = self.game_to_grid(&at);
+        let g = self.game_to_grid_tuple(&at);
         &mut self.world[g.1][g.0]
     }
 }
@@ -437,24 +536,6 @@ fn input_get_direction(input: InputType) -> Option<Direction> {
     }
 }
 
-fn direction_get_disallowed(direction: &Direction) -> Direction {
-    match direction {
-        Direction::Up => Direction::Down,
-        Direction::Right => Direction::Left,
-        Direction::Down => Direction::Up,
-        Direction::Left => Direction::Right,
-    }
-}
-
-pub fn direction_get_unit_vector(direction: Direction) -> Coord {
-    match direction {
-        Direction::Up => Coord::new(0, -1),
-        Direction::Right => Coord::new(1, 0),
-        Direction::Down => Coord::new(0, 1),
-        Direction::Left => Coord::new(-1, 0),
-    }
-}
-
 // TODO use direction
 #[derive(PartialEq, Debug,Copy,Clone)]
 pub enum InputType {
@@ -465,5 +546,3 @@ pub enum InputType {
     Left,
     Quit,
 }
-
-
