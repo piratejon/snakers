@@ -320,60 +320,78 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         game: &snake::GameState,
         at: &snake::CoordWithDirection,
     ) {
-        let partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 0)) as f64 * self.frame_percent) as i32;
-        // let one_minus_partial: i16 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * (1.0 - self.frame_percent)) as i16;
+        let partial: i32 = (GAME_TO_SCREEN_FACTOR as f64 * self.frame_percent) as i32;
+        let one_minus_partial: i32 = (GAME_TO_SCREEN_FACTOR as f64 * (1.0 - self.frame_percent)) as i32;
 
         let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
 
-        let adjust: (i32, i32) = match at.dir_next {
-            Some(snake::Direction::Up) => (0, -partial),
-            Some(snake::Direction::Down) => (0, partial),
-            Some(snake::Direction::Right) => (partial, 0),
-            Some(snake::Direction::Left) => (-partial, 0),
-            None => (0, 0),
+        let block: u32 = GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2);
+        let mut partial_block: u32 = partial as u32;
+        let mut one_minus_partial_block: u32 = one_minus_partial as u32;
+
+        let mut pos_adjust: i32 = block as i32;
+
+        let mut has_arc = true;
+        if let Some(dir_next) = at.dir_next {
+            if let Some(dir_prev) = at.dir_prev {
+                if dir_next == dir_prev.get_opposite() {
+                    has_arc = false;
+                    partial_block = block;
+                    one_minus_partial_block = block;
+                    pos_adjust = partial;
+                }
+            } else if at.dir_prev == None {
+                has_arc = false;
+                partial_block = block;
+                one_minus_partial_block = block;
+                pos_adjust = partial;
+            }
+        }
+
+        let adjust: (i32, i32, u32, u32) = match at.dir_next {
+            Some(snake::Direction::Up) => (0, -partial, block, partial_block), // ok
+            Some(snake::Direction::Down) => (0, pos_adjust, block, partial_block), // ok
+            Some(snake::Direction::Right) => (pos_adjust, 0, partial_block, block), // ok
+            Some(snake::Direction::Left) => (-partial, 0, partial_block, block), // ok
+            None => (0, 0, 0, 0),
         };
 
         let rect = Rect::new(
                 (pt.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32 + adjust.0,
                 (pt.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32 + adjust.1,
-                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
-                GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
+                adjust.2,
+                adjust.3,
         );
 
-        if let Some(dir_next) = at.dir_next {
-            if let Some(dir_prev) = at.dir_prev {
-                if dir_next == dir_prev.get_opposite() {
-                    self.canvas.set_draw_color(SNAKE_COLOR);
-                    let _ = self.canvas.fill_rect(rect);
-                } else {
-                    // println!("{:?} -> {:?}", dir_prev.get_opposite(), dir_next);
-                    let WHOLE: i16 = GAME_TO_SCREEN_FACTOR as i16 - (CELL_MARGIN * 2) as i16;
-                    let arc: (i16, i16, i16, i16) = match (dir_prev.get_opposite(), dir_next) {
-                        (snake::Direction::Up,    snake::Direction::Right) => (WHOLE, WHOLE, 180, 269), // OK
-                        (snake::Direction::Up,    snake::Direction::Left)  => (0, WHOLE, 270, 359), // OK
-                        (snake::Direction::Down,  snake::Direction::Right) => (WHOLE, 0, 90, 179), // OK
-                        (snake::Direction::Down,  snake::Direction::Left)  => (0, 0, 0, 89), // OK
-                        (snake::Direction::Left,  snake::Direction::Up)    => (WHOLE, 0, 90, 179), // OK
-                        (snake::Direction::Left,  snake::Direction::Down)  => (WHOLE, WHOLE, 180, 269), // OK
-                        (snake::Direction::Right, snake::Direction::Up)    => (0, 0, 0, 89), // OK
-                        (snake::Direction::Right, snake::Direction::Down)  => (0, WHOLE, 270, 359), // OK
-                        _ => (0, 0, 0,0),
-                    };
+        if adjust.2 > 0 && adjust.3 > 0 {
+            self.canvas.set_draw_color(SNAKE_COLOR);
+            let _ = self.canvas.fill_rect(rect);
+        }
 
-                    // draw a corner
-                    self.canvas.set_draw_color(Color::RGB(255, 0, 0));
-                    self.canvas.filled_pie(
-                        rect.x as i16 + arc.0,
-                        rect.y as i16 + arc.1,
-                        (GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as i16,
-                        arc.2, arc.3,
-                        SNAKE_COLOR
-                    );
-                }
-            } else {
-                self.canvas.set_draw_color(SNAKE_COLOR);
-                let _ = self.canvas.fill_rect(rect);
-            }
+        if has_arc {
+            // println!("{:?} -> {:?}", dir_prev.get_opposite(), dir_next);
+            let WHOLE: i16 = GAME_TO_SCREEN_FACTOR as i16 - (CELL_MARGIN * 2) as i16;
+            let arc: (i16, i16, i16, i16) = match (at.dir_prev.expect("yes").get_opposite(), at.dir_next.expect("yes")) {
+                (snake::Direction::Up,    snake::Direction::Right) => (WHOLE, WHOLE, 180, 269), // OK
+                (snake::Direction::Up,    snake::Direction::Left)  => (0, WHOLE, 270, 359), // OK
+                (snake::Direction::Down,  snake::Direction::Right) => (WHOLE, 0, 90, 179), // OK
+                (snake::Direction::Down,  snake::Direction::Left)  => (0, 0, 0, 89), // OK
+                (snake::Direction::Left,  snake::Direction::Up)    => (WHOLE, 0, 90, 179), // OK
+                (snake::Direction::Left,  snake::Direction::Down)  => (WHOLE, WHOLE, 180, 269), // OK
+                (snake::Direction::Right, snake::Direction::Up)    => (0, 0, 0, 89), // OK
+                (snake::Direction::Right, snake::Direction::Down)  => (0, WHOLE, 270, 359), // OK
+                _ => (0, 0, 0,0),
+            };
+
+            // draw a corner
+            self.canvas.set_draw_color(Color::RGB(255, 0, 0));
+            self.canvas.filled_pie(
+                rect.x as i16 + arc.0,
+                rect.y as i16 + arc.1,
+                (GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as i16,
+                arc.2, arc.3,
+                SNAKE_COLOR
+            );
         }
     }
 
