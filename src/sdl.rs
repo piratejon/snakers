@@ -321,29 +321,26 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         at: &snake::CoordWithDirection,
     ) {
         let partial: i32 = (GAME_TO_SCREEN_FACTOR as f64 * self.frame_percent) as i32;
-        let one_minus_partial: i32 = (GAME_TO_SCREEN_FACTOR as f64 * (1.0 - self.frame_percent)) as i32;
 
         let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
 
         let block: u32 = GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2);
         let mut partial_block: u32 = partial as u32;
-        let mut one_minus_partial_block: u32 = one_minus_partial as u32;
 
         let mut pos_adjust: i32 = block as i32;
 
         let mut has_arc = true;
+
         if let Some(dir_next) = at.dir_next {
             if let Some(dir_prev) = at.dir_prev {
                 if dir_next == dir_prev.get_opposite() {
                     has_arc = false;
                     partial_block = block;
-                    one_minus_partial_block = block;
                     pos_adjust = partial;
                 }
             } else if at.dir_prev == None {
                 has_arc = false;
                 partial_block = block;
-                one_minus_partial_block = block;
                 pos_adjust = partial;
             }
         }
@@ -366,10 +363,16 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         if adjust.2 > 0 && adjust.3 > 0 {
             self.canvas.set_draw_color(SNAKE_COLOR);
             let _ = self.canvas.fill_rect(rect);
+            if ! has_arc {
+                self.canvas.set_draw_color(Color::RGB(255,0,0,));
+                let _ = self.canvas.draw_rect(rect);
+            }
         }
 
         if has_arc {
-            // println!("{:?} -> {:?}", dir_prev.get_opposite(), dir_next);
+            let one_minus_partial: i32 = (GAME_TO_SCREEN_FACTOR as f64 * (1.0 - self.frame_percent)) as i32;
+            let mut one_minus_partial_block: u32 = one_minus_partial as u32;
+
             let WHOLE: i16 = GAME_TO_SCREEN_FACTOR as i16 - (CELL_MARGIN * 2) as i16;
             let arc: (i16, i16, i16, i16) = match (at.dir_prev.expect("yes").get_opposite(), at.dir_next.expect("yes")) {
                 (snake::Direction::Up,    snake::Direction::Right) => (WHOLE, WHOLE, 180, 269), // OK
@@ -384,12 +387,12 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
             };
 
             // draw a corner
-            self.canvas.set_draw_color(Color::RGB(255, 0, 0));
             self.canvas.filled_pie(
-                rect.x as i16 + arc.0,
-                rect.y as i16 + arc.1,
+                (pt.0 as i16 * GAME_TO_SCREEN_FACTOR as i16) + CELL_MARGIN as i16 + arc.0,
+                (pt.1 as i16 * GAME_TO_SCREEN_FACTOR as i16) + CELL_MARGIN as i16 + arc.1,
                 (GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as i16,
-                arc.2, arc.3,
+                arc.2,
+                arc.3,
                 SNAKE_COLOR
             );
         }
@@ -405,6 +408,23 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         let p = game.game_to_grid_tuple(&at.coord.as_tuple());
 
         let partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 0)) as f64 * self.frame_percent) as i32;
+
+        let mut has_arc = true;
+
+        if let Some(dir_next) = at.dir_next {
+            if let Some(dir_prev) = at.dir_prev {
+                if dir_next == dir_prev.get_opposite() {
+                    has_arc = false;
+                    // partial_block = block;
+                    // pos_adjust = partial;
+                }
+            } else if at.dir_prev == None {
+                has_arc = false;
+                // partial_block = block;
+                // pos_adjust = partial;
+            }
+        }
+
         let adjust: (i32, i32) = match at.dir_next {
             Some(snake::Direction::Up) => (0, -partial),
             Some(snake::Direction::Down) => (0, partial),
@@ -444,6 +464,8 @@ impl SDLContext<'_> {
 
         self.canvas.set_draw_color(Color::RGB(255, 0, 0));
         let _ = self.canvas.fill_rect(Rect::new(20, 100, 200, 50));
+
+        self.canvas.pie(500, 500, 50, 0, 59, Color::RGB(128, 128, 255));
 
         /*
         game logic down here
