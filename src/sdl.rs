@@ -51,7 +51,8 @@ struct SDLContext<'a> {
     // frame_duration_ewma: u64,
     frame_percent: f64,
 
-    snake_head_y_last: i16,
+    snake_direction_last: snake::Direction,
+    snake_position_last: i16,
 }
 
 trait SnakeGameRenderTrait {
@@ -74,7 +75,7 @@ trait SnakeGameRenderTrait {
         &mut self,
         game: &snake::GameState,
         at: &snake::CoordWithDirection,
-    );
+    ) -> bool;
     fn draw_animated_snake_bit(
         &mut self,
         game: &snake::GameState,
@@ -114,7 +115,8 @@ fn main() {
         frame_counter: 0,
         tick_counter: 0,
         frame_percent: 0.0,
-        snake_head_y_last: 0,
+        snake_direction_last: snake::Direction::Up,
+        snake_position_last: 0,
     };
 
     ctx.last_frame_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
@@ -142,7 +144,9 @@ fn main() {
         ctx.frame_percent = ((cur_time - ctx.last_tick_time) as f64) / Duration::as_nanos(&TICK_DURATION) as f64;
 
         if ctx.frame_percent >= 1.0 {
+
             ctx.frame_percent = ctx.frame_percent - 1.0;
+
             println!(
                 "frames: {}; Tick FPS: {:.02}; Avg FPS: {:.02}",
                 ctx.frame_counter,
@@ -172,18 +176,12 @@ fn rotate_rect(game: &snake::GameState, rect: &Rect, direction: &snake::Directio
     // rotation is CCW
     let matrix = direction.rotation_matrix();
 
-    println!("rect: {:?}; translate: ({},{})", rect, xtranslate, ytranslate);
-
     let corners: [(i32, i32); 4] = [
         (rect.x - xtranslate,          rect.y - ytranslate),
         (rect.x + rect.w - xtranslate, rect.y - ytranslate),
         (rect.x + rect.w - xtranslate, rect.y + rect.h - ytranslate),
         (rect.x - xtranslate,          rect.y + rect.h - ytranslate),
     ];
-
-    // for pt in corners {
-    println!("corners: {:?}", corners);
-    // }
 
     // rotate and un-translate
     let rotated: Vec<_> = corners.iter().map(
@@ -192,8 +190,6 @@ fn rotate_rect(game: &snake::GameState, rect: &Rect, direction: &snake::Directio
             (p.0 * matrix.1.0) + (p.1 * matrix.1.1) + ytranslate,
         )
     ).collect();
-
-    println!("rotated: {:?}", rotated);
 
     // find the rotated top left
     let pts: ((i32, i32), (i32, i32)) = match direction {
@@ -204,8 +200,6 @@ fn rotate_rect(game: &snake::GameState, rect: &Rect, direction: &snake::Directio
     };
 
     let out = Rect::new(pts.0.0, pts.0.1, -(pts.0.0 - pts.1.0) as u32, -(pts.0.1 - pts.1.1) as u32);
-
-    println!("rotating {:?} to {:?}", rect, out);
 
     return out;
 }
@@ -244,8 +238,7 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
 
         if let Some(first) = iter.next() {
 
-            self.draw_animated_snake_head(game, &first);
-
+            let _ = self.draw_animated_snake_head(game, &first);
             for cur in iter {
                 self.draw_animated_snake_bit(game, &cur);
                 self.connect_snake_bits(game, &cur);
@@ -273,19 +266,10 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         &mut self,
         game: &snake::GameState,
         at: &snake::CoordWithDirection,
-    ) {
+    ) -> bool {
         let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
 
-        let mut frame_percent = self.frame_percent;
-
-        /*
-        if frame_percent >= 1.0 {
-            frame_percent = 1.0;
-        }
-        */
-
-        let partial: i16 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 0)) as f64 * frame_percent) as i16;
-        // let one_minus_partial: i16 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * (1.0 - self.frame_percent)) as i16;
+        let partial: i16 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 0)) as f64 * self.frame_percent) as i16;
 
         let WHOLE: i16 = (GAME_TO_SCREEN_FACTOR - (2 * CELL_MARGIN)) as i16;
         let HALF: i16 = WHOLE / 2;
@@ -298,20 +282,37 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
             None => (0, 0, 0, 0),
         };
 
-        let y = (pt.1 as u32 * GAME_TO_SCREEN_FACTOR) as i16 + CELL_MARGIN as i16 + adjust.1;
+        let center = (
+            (pt.0 as u32 * GAME_TO_SCREEN_FACTOR) as i16 + CELL_MARGIN as i16 + adjust.0,
+            (pt.1 as u32 * GAME_TO_SCREEN_FACTOR) as i16 + CELL_MARGIN as i16 + adjust.1,
+        );
 
-        println!("{}: {} {} - {} = {} ({})", self.frame_counter, self.frame_percent, self.snake_head_y_last, y, y - self.snake_head_y_last, pt.1);
+        let snake_position_last = match at.dir_next {
+            Some(snake::Direction::Up) | Some(snake::Direction::Down) => center.1,
+            Some(snake::Direction::Left) | Some(snake::Direction::Right) => center.0,
+            None => 0,
+        };
 
-        self.snake_head_y_last = y;
+        if Some(self.snake_direction_last) == at.dir_next {
+            if self.snake_position_last == snake_position_last {
+                // return false;
+            }
+        } else {
+            self.snake_direction_last = at.dir_next.expect("must have a value by now");
+        }
+
+        self.snake_position_last = snake_position_last;
 
         self.canvas.filled_pie(
-            (pt.0 as u32 * GAME_TO_SCREEN_FACTOR) as i16 + CELL_MARGIN as i16 + adjust.0,
-            y,
+            center.0,
+            center.1,
             ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) / 2) as i16,
             adjust.2,
             adjust.3,
             SNAKE_COLOR
         );
+
+        return true;
     }
 
     fn draw_animated_snake_bit(
