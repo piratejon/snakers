@@ -24,7 +24,7 @@ const CELL_MARGIN: u32 = 4;
 const WIDTH: u32 = WIDTH_PIXELS / GAME_TO_SCREEN_FACTOR;
 const HEIGHT: u32 = HEIGHT_PIXELS / GAME_TO_SCREEN_FACTOR;
 
-const FRAMES_PER_SECOND: f64 = 60.0;
+const FRAMES_PER_SECOND: f64 = 30.0;
 const FRAME_DURATION: Duration = Duration::from_nanos((1_000_000_000.0 / FRAMES_PER_SECOND) as u64);
 
 const RATE_LIMITED: bool = true;
@@ -50,6 +50,8 @@ struct SDLContext<'a> {
     tick_counter: u64,
     // frame_duration_ewma: u64,
     frame_percent: f64,
+
+    snake_head_y_last: i16,
 }
 
 trait SnakeGameRenderTrait {
@@ -112,6 +114,7 @@ fn main() {
         frame_counter: 0,
         tick_counter: 0,
         frame_percent: 0.0,
+        snake_head_y_last: 0,
     };
 
     ctx.last_frame_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
@@ -139,6 +142,7 @@ fn main() {
         ctx.frame_percent = ((cur_time - ctx.last_tick_time) as f64) / Duration::as_nanos(&TICK_DURATION) as f64;
 
         if ctx.frame_percent >= 1.0 {
+            ctx.frame_percent = ctx.frame_percent - 1.0;
             println!(
                 "frames: {}; Tick FPS: {:.02}; Avg FPS: {:.02}",
                 ctx.frame_counter,
@@ -272,23 +276,37 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
     ) {
         let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
 
-        let partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * self.frame_percent) as i32;
-        let one_minus_partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * (1.0 - self.frame_percent)) as i32;
+        let mut frame_percent = self.frame_percent;
+
+        /*
+        if frame_percent >= 1.0 {
+            frame_percent = 1.0;
+        }
+        */
+
+        let partial: i16 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 0)) as f64 * frame_percent) as i16;
+        // let one_minus_partial: i16 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * (1.0 - self.frame_percent)) as i16;
 
         let WHOLE: i16 = (GAME_TO_SCREEN_FACTOR - (2 * CELL_MARGIN)) as i16;
         let HALF: i16 = WHOLE / 2;
 
         let adjust: (i16, i16, i16, i16) = match at.dir_next {
-            Some(snake::Direction::Up) => (HALF, WHOLE, 179, 0),
-            Some(snake::Direction::Down) => (HALF, 0, 0, 179),
-            Some(snake::Direction::Right) => (0, HALF, 269, 90),
-            Some(snake::Direction::Left) => (WHOLE, HALF, 90, 269),
+            Some(snake::Direction::Up) => (HALF, WHOLE - partial, 179, 0),
+            Some(snake::Direction::Down) => (HALF, partial, 0, 179),
+            Some(snake::Direction::Right) => (partial, HALF, 269, 90),
+            Some(snake::Direction::Left) => (WHOLE - partial, HALF, 90, 269),
             None => (0, 0, 0, 0),
         };
 
+        let y = (pt.1 as u32 * GAME_TO_SCREEN_FACTOR) as i16 + CELL_MARGIN as i16 + adjust.1;
+
+        println!("{}: {} {} - {} = {} ({})", self.frame_counter, self.frame_percent, self.snake_head_y_last, y, y - self.snake_head_y_last, pt.1);
+
+        self.snake_head_y_last = y;
+
         self.canvas.filled_pie(
             (pt.0 as u32 * GAME_TO_SCREEN_FACTOR) as i16 + CELL_MARGIN as i16 + adjust.0,
-            (pt.1 as u32 * GAME_TO_SCREEN_FACTOR) as i16 + CELL_MARGIN as i16 + adjust.1,
+            y,
             ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) / 2) as i16,
             adjust.2,
             adjust.3,
@@ -301,11 +319,22 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         game: &snake::GameState,
         at: &snake::CoordWithDirection,
     ) {
+        let partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 0)) as f64 * self.frame_percent) as i32;
+        // let one_minus_partial: i16 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2)) as f64 * (1.0 - self.frame_percent)) as i16;
+
         let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
 
+        let adjust: (i32, i32) = match at.dir_next {
+            Some(snake::Direction::Up) => (0, -partial),
+            Some(snake::Direction::Down) => (0, partial),
+            Some(snake::Direction::Right) => (partial, 0),
+            Some(snake::Direction::Left) => (-partial, 0),
+            None => (0, 0),
+        };
+
         let rect = Rect::new(
-                (pt.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32,
-                (pt.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32,
+                (pt.0 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32 + adjust.0,
+                (pt.1 as u32 * GAME_TO_SCREEN_FACTOR) as i32 + CELL_MARGIN as i32 + adjust.1,
                 GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
                 GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 2),
         );
@@ -316,17 +345,17 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
                     self.canvas.set_draw_color(SNAKE_COLOR);
                     let _ = self.canvas.fill_rect(rect);
                 } else {
-                    println!("{:?} -> {:?}", dir_prev.get_opposite(), dir_next);
+                    // println!("{:?} -> {:?}", dir_prev.get_opposite(), dir_next);
                     let WHOLE: i16 = GAME_TO_SCREEN_FACTOR as i16 - (CELL_MARGIN * 2) as i16;
                     let arc: (i16, i16, i16, i16) = match (dir_prev.get_opposite(), dir_next) {
-                        (snake::Direction::Up, snake::Direction::Right) => (WHOLE, WHOLE, 180, 269), // OK
-                        (snake::Direction::Up, snake::Direction::Left) => (0, WHOLE, 270, 359), // OK
-                        (snake::Direction::Down, snake::Direction::Right) => (WHOLE, 0, 90, 179), // OK
-                        (snake::Direction::Down, snake::Direction::Left) => (0, 0, 0, 89), // OK
-                        (snake::Direction::Left, snake::Direction::Up) => (WHOLE, 0, 90, 179), // OK
-                        (snake::Direction::Left, snake::Direction::Down) => (WHOLE, WHOLE, 180, 269), // OK
-                        (snake::Direction::Right, snake::Direction::Up) => (0, 0, 0, 89), // OK
-                        (snake::Direction::Right, snake::Direction::Down) => (0, WHOLE, 270, 359), // OK
+                        (snake::Direction::Up,    snake::Direction::Right) => (WHOLE, WHOLE, 180, 269), // OK
+                        (snake::Direction::Up,    snake::Direction::Left)  => (0, WHOLE, 270, 359), // OK
+                        (snake::Direction::Down,  snake::Direction::Right) => (WHOLE, 0, 90, 179), // OK
+                        (snake::Direction::Down,  snake::Direction::Left)  => (0, 0, 0, 89), // OK
+                        (snake::Direction::Left,  snake::Direction::Up)    => (WHOLE, 0, 90, 179), // OK
+                        (snake::Direction::Left,  snake::Direction::Down)  => (WHOLE, WHOLE, 180, 269), // OK
+                        (snake::Direction::Right, snake::Direction::Up)    => (0, 0, 0, 89), // OK
+                        (snake::Direction::Right, snake::Direction::Down)  => (0, WHOLE, 270, 359), // OK
                         _ => (0, 0, 0,0),
                     };
 
@@ -345,7 +374,6 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
                 let _ = self.canvas.fill_rect(rect);
             }
         }
-
     }
 
     fn connect_snake_bits(
@@ -357,6 +385,15 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
 
         let p = game.game_to_grid_tuple(&at.coord.as_tuple());
 
+        let partial: i32 = ((GAME_TO_SCREEN_FACTOR - (CELL_MARGIN * 0)) as f64 * self.frame_percent) as i32;
+        let adjust: (i32, i32) = match at.dir_next {
+            Some(snake::Direction::Up) => (0, -partial),
+            Some(snake::Direction::Down) => (0, partial),
+            Some(snake::Direction::Right) => (partial, 0),
+            Some(snake::Direction::Left) => (-partial, 0),
+            None => (0, 0),
+        };
+
         let GF: i32 = GAME_TO_SCREEN_FACTOR as i32;
         let CM: i32 = CELL_MARGIN as i32;
         let CM2: u32 = CM as u32 * 2;
@@ -366,10 +403,10 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
 
         if let Some(dir) = at.dir_next {
             let r = match dir {
-                snake::Direction::Down => (cx + CM, cy - CM + GF as i32, GF as u32 - CM2, CM2),
-                snake::Direction::Up => (cx + CM, cy - CM, GF as u32 - CM2, CM2),
-                snake::Direction::Right => (cx - CM + GF as i32, cy + CM, CM2, GF as u32 - CM2),
-                snake::Direction::Left => (cx - CM, cy + CM, CM2, GF as u32 - CM2),
+                snake::Direction::Down => (cx + CM, partial + cy - CM + GF as i32, GF as u32 - CM2, CM2),
+                snake::Direction::Up => (cx + CM, -partial + cy - CM, GF as u32 - CM2, CM2),
+                snake::Direction::Right => (partial + cx - CM + GF as i32, cy + CM, CM2, GF as u32 - CM2),
+                snake::Direction::Left => (-partial + cx - CM, cy + CM, CM2, GF as u32 - CM2),
             };
 
             let _ = self.canvas.fill_rect(Rect::new(r.0, r.1, r.2, r.3));
@@ -379,6 +416,7 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
 
 impl SDLContext<'_> {
     fn draw(&mut self, game: &snake::GameState) {
+
         // update background
         self.color_index = (self.color_index + 1) % 255;
         // self.canvas.set_draw_color(Color::RGB(self.color_index, 64, 255 - self.color_index));
@@ -414,7 +452,7 @@ impl SDLContext<'_> {
             let time_to_next_frame =
                 FRAME_DURATION - Duration::from_secs(frame_elapsed / self.timer_freq);
 
-            if time_to_next_frame > Duration::from_secs(0) {
+            if time_to_next_frame > Duration::from_nanos(0) {
                 std::thread::sleep(time_to_next_frame);
             }
 
