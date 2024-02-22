@@ -80,7 +80,7 @@ impl Coord {
     }
 }
 
-const INITIAL_SNAKE_LENGTH: i32 = 8;
+const INITIAL_SNAKE_LENGTH: i32 = 5;
 const SNAKE_GROWTH_PER_FOOD: i32 = 1;
 
 #[derive(Debug, PartialEq)]
@@ -94,7 +94,7 @@ pub enum ItemType {
 
 #[derive(Copy,Clone,Debug)]
 pub struct CoordWithDirection {
-    pub dir_next: Option<Direction>,
+    pub dir_next: Direction,
     pub coord: Coord,
     pub dir_prev: Option<Direction>,
 }
@@ -176,6 +176,15 @@ impl Direction {
             Direction::Left => Coord::new(-1, 0),
         }
     }
+
+    pub fn get_angle(&self) -> i16 {
+        match self {
+            Direction::Up => 270,
+            Direction::Right => 0,
+            Direction::Down => 90,
+            Direction::Left => 180,
+        }
+    }
 }
 
 pub type GridType = Vec<Vec<ItemType>>;
@@ -245,11 +254,6 @@ impl GameState {
             pending_input: InputType::Nothing,
         };
 
-        println!(
-            "({},{}): x:({},{}); y:({},{})",
-            width, height, state.xrange.0, state.xrange.1, state.yrange.0, state.yrange.1
-        );
-
         state.initialize_snake();
 
         state.drop_new_food();
@@ -312,6 +316,8 @@ impl GameState {
         match self[&target.coord] {
             ItemType::Nothing => true,
             ItemType::Food => true,
+            // if size is not increasing, then the current tail square will be open
+            ItemType::SnakeTail => self.snake.growing <= 0,
             _ => {
                 println!("{:#?} has {:#?}", target, self[&target.coord]);
                 false
@@ -322,7 +328,7 @@ impl GameState {
     fn advance_head(&mut self, new_head: &CoordWithDirection) {
         // advance the head
         let mut old_head = self.snake.body.front_mut().unwrap();
-        old_head.dir_next = Some(new_head.dir_prev.expect("head has elements behind it").get_opposite());
+        old_head.dir_next = new_head.dir_prev.expect("head has elements behind it").get_opposite();
         let coord = old_head.coord.clone();
         self[&coord] = ItemType::SnakeBit;
 
@@ -386,7 +392,7 @@ impl GameState {
 
             println!("init snake: x: {}, y: {}", at.x, at.y);
 
-            let dir_next: Option<Direction> = Some(Direction::Up);
+            let dir_next: Direction = Direction::Up;
             let mut dir_prev: Option<Direction> = Some(Direction::Down);
 
             if y == 0 {
@@ -447,11 +453,11 @@ impl GameState {
                 if new_y >= self.yrange.0 {
                     if new_y <= self.yrange.1 {
                         let out = CoordWithDirection {
-                            dir_next: Some(*d),
+                            dir_next: *d,
                             coord: target,
                             dir_prev: Some(d.get_opposite()),
                         };
-                        println!("created target {:?} from {:?}+{:?}", target, a, d);
+                        // println!("created target {:?} from {:?}+{:?}", target, a, d);
                         return Some(out);
                     }
                 }
