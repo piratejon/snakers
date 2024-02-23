@@ -58,41 +58,89 @@ fn main() {
     }
 }
 
-fn reverse_transform(bitmap_index: usize, d: usize, bpp: usize) -> Option<usize> {
+fn index_to_xyc(index: usize, width: usize, bpp: usize) -> (usize, usize, usize) {
 
-    let channel = bitmap_index % bpp;
+    let channel: usize = index % bpp;
+    let pixel_index: usize = (index - channel) / bpp;
 
-    let pixel_index = (bitmap_index - channel) / bpp;
+    let x_px: usize = pixel_index % width;
+    let y_px: usize = (pixel_index - x_px) / width;
 
-    let x_px = pixel_index % d;
-    let y_px = (pixel_index - x_px) / d;
+    println!("index_to_xyc: {}@({},{}) -> ({},{},{})", index, width, bpp, x_px, y_px, channel);
+
+    (x_px, y_px, channel)
+}
+
+fn xyc_to_index(x: usize, y: usize, channel: usize, width: usize, bpp: usize) -> usize {
+    let out = (((y * width) + x) * bpp) + channel;
+    println!("xyc_to_index: ({},{},{})@({},{}) -> {}", x,y,channel, width, bpp, out);
+    return out;
+}
+
+// round-trip it
+fn test_transform_roundtrip(x: usize, y: usize, channel: usize, width: usize, bpp: usize) {
+    let i0 = xyc_to_index(x,y,channel,width,bpp);
+    let i1 = reverse_transform(i0,width,bpp, 0.0, 1.0).unwrap();
+    let (x1,y1,c1) = index_to_xyc(i1, width, bpp);
+
+    println!("({},{},{}) vs ({},{},{})", x,y,channel, x1,y1,c1);
+}
+
+fn transform_test(width: usize, x: usize, y: usize) {
+    let bpp = 3;
+    let c = 0;
+    let i = xyc_to_index(x,y,c,width,bpp);
+    if let Some(out) = reverse_transform(i, width, bpp, 0.0, 1.0) {
+        let (x1, y1, c1) = index_to_xyc(out, width, bpp);
+        println!("{}: ({},{},{})={} -> {}=({},{},{})", width, x,y,c,i, out,x1,y1,c1);
+    } else {
+        println!("{}: {} -> None!", width, i);
+    };
+}
+
+fn reverse_transform(bitmap_index: usize, width: usize, bpp: usize, inner_radius: f64, outer_radius: f64) -> Option<usize> {
+
+    let (x_px, y_px, channel) = index_to_xyc(bitmap_index, width, bpp);
 
     // normalize
-    let x = x_px as f64 / d as f64;
-    let y = y_px as f64 / d as f64;
+    let x: f64 = x_px as f64 / width as f64;
+    let y: f64 = y_px as f64 / width as f64;
 
+    //
     // reverse
-    let x2 = x.powi(2)  + y.powi(2);
-    if x2 > 1.0 {
+    //
+
+    // radius check
+    let x2: f64 = x.powi(2)  + y.powi(2);
+    if x2 < inner_radius.powi(2) || outer_radius.powi(2) < x2 {
         return None;
     }
+    let xr: f64 = x2.sqrt();
 
-    let xr = x2.sqrt();
     // x and y are all [0,1] so atan2 is always in the first quadrant
-    let yr = y.atan2(x) / std::f64::consts::FRAC_PI_2;
+    if y < 0.0 || x < 0.0 || y > 1.0 || x > 1.0 {
+        panic!("{},{}", x,  y);
+    }
+    let yr: f64 = y.atan2(x) / std::f64::consts::FRAC_PI_2;
 
     // scale back to pixels
-    let xb = (xr * d as f64) as usize;
-    let yb = (yr * d as f64) as usize;
+    let xb: usize = (xr * width as f64) as usize;
+    let yb: usize = (yr * width as f64) as usize;
+
+    let out = xyc_to_index(xb, yb, channel, width, bpp);
+
+    let (xo, yo, co) = index_to_xyc(out, width, bpp);
+
+    // println!("({},{}) -> ({},{}) -> ({},{}) -> ({},{}) -> {} -> ({},{},{})", x_px, y_px, x, y, xr, yr, xb, yb, out, xo,yo,co);
 
     // and index
-    let i1 = (((yb * d) + xb) * bpp) + channel;
-
-    return Some(i1);
+    return Some(out);
 }
 
 fn forward_transform(bitmap_index: usize, d: usize, bpp: usize) -> usize {
 
+    let (x_px, y_px, channel) = index_to_xyc(bitmap_index, d, bpp);
+
     let channel = bitmap_index % bpp;
 
     let pixel_index = (bitmap_index - channel) / bpp;
@@ -104,9 +152,7 @@ fn forward_transform(bitmap_index: usize, d: usize, bpp: usize) -> usize {
     let x = x_px as f64 / d as f64;
     let y = y_px as f64 / d as f64;
 
-    // reverse
-    // let xr = x.powi(2) + y.powi(2).sqrt();
-    // let yr = y.atan2(x) / std::f64::consts::FRAC_PI_2;
+    // forward
     let xr = x * (y * std::f64::consts::FRAC_PI_2).cos();
     let yr = x * (y * std::f64::consts::FRAC_PI_2).sin();
 
@@ -115,29 +161,10 @@ fn forward_transform(bitmap_index: usize, d: usize, bpp: usize) -> usize {
     let yb = (yr * d as f64) as usize;
 
     // and index
-    let i1 = (((yb * d) + xb) * bpp) + channel;
-
-    return i1;
+    return xyc_to_index(xb, yb, channel, d, bpp);
 }
 
 impl SDLContext<'_> {
-
-    fn draw_circle(&mut self, cx: i32, cy: i32, or: i32, ir: i32) {
-        // draw a box
-        let texture_creator = self.canvas.texture_creator();
-
-        let d = (ir * 2) + or;
-
-        let mut texture = texture_creator.create_texture(None, sdl2::render::TextureAccess::Target, d as u32, d as u32).unwrap();
-
-        let textures = vec![(&mut texture, ()),];
-        let result = self.canvas.with_multiple_texture_canvas(&mut textures.iter(), |tc, _| {
-            tc.filled_pie(0, 0, or as i16, 0, 90, GREEN);
-            tc.pie(0, 0, (ir + (or / 2)) as i16, 0, 90, BLACK);
-            tc.filled_pie(0, 0, ir as i16, 0, 90, BLACK);
-        });
-        self.canvas.copy(&texture, None, sdl2::rect::Rect::new(cx - or - ir, cy - or - ir, d as u32, d as u32));
-    }
 
     fn pixel_test (&mut self, cx: i32, cy: i32, d: i32) {
 
@@ -160,9 +187,9 @@ impl SDLContext<'_> {
             let t1 = rand::thread_rng().gen_range((t0 + 1)..360) as i16;
             ssrc.fill_rect(sdl2::rect::Rect::new(cx as i32, cy as i32, (cx + r) as u32, (cy + r) as u32), sdl2::pixels::Color::RGB(rand::thread_rng().gen_range(0..=255),rand::thread_rng().gen_range(0..=255),rand::thread_rng().gen_range(0..=255)));
         }
-        ssrc.fill_rect(sdl2::rect::Rect::new(0, 0, 50, 50), sdl2::pixels::Color::RGB(0,127,255));
+        ssrc.fill_rect(sdl2::rect::Rect::new(0, 0, 10, 10), sdl2::pixels::Color::RGB(0,127,255));
 
-        // transform it
+        // bitmap copy
         ssrc.with_lock(|src| {
             sdst.with_lock_mut(|dst| {
                 for (i, e) in src.iter().enumerate() {
@@ -185,7 +212,7 @@ impl SDLContext<'_> {
         ssrc.with_lock(|src| {
             sdst3.with_lock_mut(|dst| {
                 for i in 0..((d*d*bpp) as usize) {
-                    if let Some(i1) = reverse_transform(i, d as usize, bpp as usize) {
+                    if let Some(i1) = reverse_transform(i, d as usize, bpp as usize, 0.0, 1.0) {
                         if i1 >= 0 && i1 < (d * d * bpp) as usize {
                             dst[i] = src[i1];
                         }
@@ -212,7 +239,16 @@ impl SDLContext<'_> {
 
         self.canvas.set_draw_color(RED);
 
-        self.pixel_test(100, 300, 200 as i32);
+        self.pixel_test(100, 100, 60 as i32);
+        self.pixel_test(100, 300, 59 as i32);
+
+        for i in 0..59 {
+            transform_test(60, i, i);
+            transform_test(59, i, i);
+        }
+
+        test_transform_roundtrip(30,49,0,60,3);
+        test_transform_roundtrip(30,49,0,59,3);
 
         self.canvas.present();
     }
