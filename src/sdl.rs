@@ -1,9 +1,9 @@
 
-// provides pie and filled_pie
+// provides pie and filled_pie for sdl2::render::Canvas
 use sdl2::gfx::primitives::DrawRenderer;
 
 const WIDTH_PIXELS: u32 = 1200;
-const HEIGHT_PIXELS: u32 = 800;
+const HEIGHT_PIXELS: u32 = 750;
 
 const GAME_TO_PIXEL: u32 = 50;
 
@@ -17,7 +17,7 @@ const FRAME_DURATION: std::time::Duration = std::time::Duration::from_nanos((1_0
 
 const RATE_LIMITED: bool = true;
 
-const TICKS_PER_SECOND: f64 = 1.0;
+const TICKS_PER_SECOND: f64 = 4.0;
 const TICK_DURATION: std::time::Duration = std::time::Duration::from_nanos((1_000_000_000.0 / TICKS_PER_SECOND) as u64);
 
 const FOOD_COLOR: sdl2::pixels::Color = sdl2::pixels::Color::RGB(200, 200, 20);

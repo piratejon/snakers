@@ -16,6 +16,10 @@ path = "src/cli.rs"
 name = "snakers-sdl"
 path = "src/sdl.rs"
 
+[[bin]]
+name = "textures"
+path = "src/textures.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
