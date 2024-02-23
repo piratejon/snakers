@@ -72,17 +72,14 @@ fn reverse_transform(bitmap_index: usize, d: usize, bpp: usize) -> Option<usize>
     let y = y_px as f64 / d as f64;
 
     // reverse
-    let xr = (x.powi(2) + y.powi(2)).sqrt();
-    let angle = y.atan2(x);
-    let mut yr: f64 = 0.0;
-    if angle < 0.0 || angle > std::f64::consts::FRAC_PI_2 {
+    let x2 = x.powi(2)  + y.powi(2);
+    if x2 > 1.0 {
         return None;
     }
-    yr = y.atan2(x) / std::f64::consts::FRAC_PI_2;
 
-    if (xr.powi(2)  + yr.powi(2)) > (d.pow(2) as f64) {
-        return None;
-    }
+    let xr = x2.sqrt();
+    // x and y are all [0,1] so atan2 is always in the first quadrant
+    let yr = y.atan2(x) / std::f64::consts::FRAC_PI_2;
 
     // scale back to pixels
     let xb = (xr * d as f64) as usize;
