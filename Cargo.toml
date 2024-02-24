@@ -2,8 +2,8 @@
 name = "prj"
 version = "0.1.0"
 edition = "2021"
-#default-run = "snakers-sdl"
-default-run = "textures"
+default-run = "snakers-sdl2"
+#default-run = "textures"
 
 [lib]
 name = "snake"
@@ -11,15 +11,15 @@ path = "src/snake.rs"
 
 [[bin]]
 name = "snakers-cli"
-path = "src/cli.rs"
+path = "src/bin/cli.rs"
 
 [[bin]]
-name = "snakers-sdl"
-path = "src/sdl.rs"
+name = "snakers-sdl2"
+path = "src/bin/sdl2.rs"
 
 [[bin]]
 name = "textures"
-path = "src/scratch/textures.rs"
+path = "src/bin/scratch/textures.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

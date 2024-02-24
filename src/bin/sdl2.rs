@@ -2,6 +2,8 @@
 // provides pie and filled_pie for sdl2::render::Canvas
 use sdl2::gfx::primitives::DrawRenderer;
 
+// use snake::entities;
+
 const WIDTH_PIXELS: u32 = 1200;
 const HEIGHT_PIXELS: u32 = 750;
 
@@ -75,13 +77,6 @@ trait SnakeGameRenderTrait {
         at: &snake::CoordWithDirection,
         prev: &snake::CoordWithDirection,
         next: Option<&snake::CoordWithDirection>,
-    );
-
-    fn draw_snake_body_angle(
-        &mut self,
-        game: &snake::GameState,
-        at: &snake::CoordWithDirection,
-        angle: i16
     );
 
     fn draw_bounding_box(&mut self, pt_px: &(i32, i32), direction: &snake::Direction, partial_px: i32);
@@ -362,52 +357,6 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
 
         self.canvas.set_draw_color(RED);
         let _ = self.canvas.draw_rect(bounding);
-    }
-
-    fn draw_snake_body_angle(
-        &mut self,
-        game: &snake::GameState,
-        at: &snake::CoordWithDirection,
-        angle: i16
-    )
-    {
-        angle;
-        /*
-        self.draw_snake_body_angle(game, at, angle);
-        let one_minus_partial: i32 = (GAME_TO_PIXEL as f64 * (1.0 - self.frame_percent)) as i32;
-        let mut one_minus_partial_block: u32 = one_minus_partial as u32;
-
-        let WHOLE: i16 = GAME_TO_PIXEL as i16 - (CELL_MARGIN_PX * 2) as i16;
-        let arc: (i16, i16, i16, i16) = match (at.dir_prev.expect("yes").get_opposite(), at.dir_next) {
-            (snake::Direction::Up,    snake::Direction::Right) => (WHOLE, WHOLE, 180, 269), // OK
-            (snake::Direction::Up,    snake::Direction::Left)  => (0, WHOLE, 270, 359), // OK
-            (snake::Direction::Down,  snake::Direction::Right) => (WHOLE, 0, 90, 179), // OK
-            (snake::Direction::Down,  snake::Direction::Left)  => (0, 0, 0, 89), // OK
-            (snake::Direction::Left,  snake::Direction::Up)    => (WHOLE, 0, 90, 179), // OK
-            (snake::Direction::Left,  snake::Direction::Down)  => (WHOLE, WHOLE, 180, 269), // OK
-            (snake::Direction::Right, snake::Direction::Up)    => (0, 0, 0, 89), // OK
-            (snake::Direction::Right, snake::Direction::Down)  => (0, WHOLE, 270, 359), // OK
-            _ => (0, 0, 0,0),
-        };
-
-        // draw a corner
-        self.canvas.filled_pie(
-            (pt.0 as i16 * GAME_TO_PIXEL as i16) + CELL_MARGIN_PX as i16 + arc.0,
-            (pt.1 as i16 * GAME_TO_PIXEL as i16) + CELL_MARGIN_PX as i16 + arc.1,
-            (GAME_TO_PIXEL - (CELL_MARGIN_PX * 2)) as i16,
-            arc.2,
-            arc.3,
-            SNAKE_COLOR
-        );
-        self.canvas.arc(
-            (pt.0 as i16 * GAME_TO_PIXEL as i16) + CELL_MARGIN_PX as i16 + arc.0,
-            (pt.1 as i16 * GAME_TO_PIXEL as i16) + CELL_MARGIN_PX as i16 + arc.1,
-            (GAME_TO_PIXEL - (CELL_MARGIN_PX * 2)) as i16,
-            arc.2,
-            arc.3,
-            RED,
-        );
-        */
     }
 
     fn draw_animated_snake_bit (
