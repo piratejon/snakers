@@ -15,7 +15,7 @@ path = "src/bin/cli.rs"
 
 [[bin]]
 name = "snakers-sdl2"
-path = "src/bin/sdl2.rs"
+path = "src/snakers_sdl2.rs"
 
 [[bin]]
 name = "textures"

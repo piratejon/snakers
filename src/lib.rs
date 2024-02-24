@@ -1,4 +1,6 @@
 mod snake {
-    mod entities {
+    mod sdl2 {
+    }
+    mod textures {
     }
 }

@@ -1,0 +1,344 @@
+
+// provides pie and filled_pie for sdl2::render::Canvas
+use sdl2::gfx::primitives::DrawRenderer;
+
+mod textures;
+
+use crate::textures::SnakeTextureManager;
+
+use ::snake::InputType;
+use ::snake::ItemType;
+use ::snake::GameState;
+use ::snake::CoordWithDirection;
+use ::snake::Direction;
+use ::snake::StateTransition;
+
+const WIDTH_PIXELS: u32 = 1200;
+const HEIGHT_PIXELS: u32 = 750;
+
+const GAME_TO_PIXEL: u32 = 50;
+
+const CELL_MARGIN_PX: u32 = 4;
+
+const WIDTH: u32 = WIDTH_PIXELS / GAME_TO_PIXEL;
+const HEIGHT: u32 = HEIGHT_PIXELS / GAME_TO_PIXEL;
+
+const FRAMES_PER_SECOND: f64 = 30.0;
+const FRAME_DURATION: std::time::Duration = std::time::Duration::from_nanos((1_000_000_000.0 / FRAMES_PER_SECOND) as u64);
+
+const RATE_LIMITED: bool = true;
+
+const TICKS_PER_SECOND: f64 = 4.0;
+const TICK_DURATION: std::time::Duration = std::time::Duration::from_nanos((1_000_000_000.0 / TICKS_PER_SECOND) as u64);
+
+const FOOD_COLOR: sdl2::pixels::Color = sdl2::pixels::Color::RGB(200, 200, 20);
+const RED: sdl2::pixels::Color = sdl2::pixels::Color::RGB(255, 0, 0);
+const BLUE: sdl2::pixels::Color = sdl2::pixels::Color::RGB(0, 0, 255);
+
+struct SDLContext<'a> {
+    color_index: u8,
+    event_pump: &'a mut sdl2::EventPump,
+    canvas: &'a mut sdl2::render::Canvas<sdl2::video::Window>,
+    timer: &'a mut sdl2::TimerSubsystem,
+
+    timer_freq: u64,
+    start_time: u64,
+    last_frame_time: u64,
+    last_tick_time: u64,
+    frame_counter: u64,
+    tick_counter: u64,
+    // frame_duration_ewma: u64,
+    frame_percent: f64,
+
+    stm: SnakeTextureManager<'a>,
+}
+
+trait SnakeGameRenderTrait {
+
+    fn draw_food(&mut self, at: &(usize, usize));
+
+    fn transform_game_rect_to_raster(&self,
+                                game: &GameState,
+                                x: i32,
+                                y: i32,
+                                w: i32,
+                                h: i32,
+                                direction: &Direction) -> sdl2::rect::Rect;
+
+    fn draw_bounding_box(&mut self, pt_px: &(i32, i32), direction: &Direction, partial_px: i32);
+}
+
+fn main() {
+
+    let sdl_context = sdl2::init().unwrap();
+
+    let video_subsystem = sdl_context.video().unwrap();
+
+    let window = video_subsystem
+        .window("snake.rs - SDL2 Driver", WIDTH_PIXELS, HEIGHT_PIXELS)
+        .position(0, 0)
+        .build()
+        .unwrap();
+
+    let mut canvas = Some(window.into_canvas().build().unwrap());
+
+    if let Some(ref mut canvas_here) = canvas {
+        canvas_here.set_draw_color(sdl2::pixels::Color::RGB(0, 255, 255));
+        canvas_here.clear();
+        canvas_here.present();
+    }
+
+    let timer = sdl_context.timer();
+
+    let mut ctx: SDLContext = SDLContext {
+        color_index: 0,
+        canvas: &mut canvas.unwrap(),
+        event_pump: &mut sdl_context.event_pump().unwrap(),
+        timer: &mut timer.unwrap(),
+        timer_freq: 0,
+        start_time: 0,
+        last_frame_time: 0,
+        last_tick_time: 0,
+        frame_counter: 0,
+        tick_counter: 0,
+        frame_percent: 0.0,
+        stm: SnakeTextureManager::new(GAME_TO_PIXEL, CELL_MARGIN_PX),
+    };
+
+    ctx.last_frame_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
+    ctx.start_time = ctx.last_frame_time;
+    ctx.timer_freq = sdl2::TimerSubsystem::performance_frequency(&ctx.timer);
+
+    let mut game = GameState::new(WIDTH, HEIGHT);
+
+    ctx.last_tick_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
+
+    let mut last_tick_frame_number = ctx.frame_counter;
+
+    loop {
+        ctx.draw(&game);
+
+        let input = ctx.get_input();
+
+        match game.handle_input(input) {
+            StateTransition::Stop => break,
+            _ => (),
+        }
+
+        let cur_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
+
+        ctx.frame_percent = ((cur_time - ctx.last_tick_time) as f64) / std::time::Duration::as_nanos(&TICK_DURATION) as f64;
+
+        if ctx.frame_percent >= 1.0 {
+
+            ctx.frame_percent = ctx.frame_percent - 1.0;
+
+            println!(
+                "frames: {}; Tick FPS: {:.02}; Avg FPS: {:.02}",
+                ctx.frame_counter,
+                1e9 * (((ctx.frame_counter - last_tick_frame_number) as f64)
+                    / ((cur_time - ctx.last_tick_time) as f64)),
+                1e9 * ((ctx.frame_counter as f64) / ((cur_time - ctx.start_time) as f64)),
+            );
+
+            match game.update_state() {
+                StateTransition::Stop => break,
+                _ => (),
+            }
+
+            last_tick_frame_number = ctx.frame_counter;
+            ctx.tick_counter += 1;
+            ctx.last_tick_time = cur_time;
+        }
+
+        ctx.frame_counter += 1;
+    }
+}
+
+fn rotate_rect(center: &(i32, i32), rect: &sdl2::rect::Rect, direction: &Direction) -> sdl2::rect::Rect {
+
+    // rotation is CCW
+    let matrix = direction.rotation_matrix();
+
+    let corners: [(i32, i32); 4] = [
+        (rect.x - center.0,          rect.y - center.1),
+        (rect.x + rect.w - center.0, rect.y - center.1),
+        (rect.x + rect.w - center.0, rect.y + rect.h - center.1),
+        (rect.x - center.0,          rect.y + rect.h - center.1),
+    ];
+
+    // rotate and un-translate
+    let rotated: Vec<_> = corners.iter().map(
+        |p| (
+            (p.0 * matrix.0.0) + (p.1 * matrix.0.1) + center.0,
+            (p.0 * matrix.1.0) + (p.1 * matrix.1.1) + center.1,
+        )
+    ).collect();
+
+    // find the rotated top left
+    let pts: ((i32, i32), (i32, i32)) = match direction {
+        Direction::Up    => (rotated[0], rotated[2]),
+        Direction::Down  => (rotated[2], rotated[0]),
+        Direction::Left  => (rotated[1], rotated[3]),
+        Direction::Right => (rotated[3], rotated[1]),
+    };
+
+    let out = sdl2::rect::Rect::new (pts.0.0,
+                                     pts.0.1,
+                                     (pts.1.0 - pts.0.0) as u32,
+                                     (pts.1.1 - pts.0.1) as u32);
+
+    // println!("rotate {:?} to {:?}", rect, out);
+
+    return out;
+}
+
+impl SnakeGameRenderTrait for SDLContext<'_> {
+
+    fn draw_food(&mut self, at: &(usize, usize)) {
+        self.canvas.set_draw_color(FOOD_COLOR);
+        let _ = self.canvas.fill_rect(sdl2::rect::Rect::new(
+            ((at.0 as u32 * GAME_TO_PIXEL) + CELL_MARGIN_PX) as i32,
+            ((at.1 as u32 * GAME_TO_PIXEL) + CELL_MARGIN_PX) as i32,
+            GAME_TO_PIXEL - (CELL_MARGIN_PX * 2),
+            GAME_TO_PIXEL - (CELL_MARGIN_PX * 2),
+        ));
+    }
+
+    /*
+     * given a point in the game, translate it to raster, rotated by direction, and with
+     * partial_frame
+     * */
+    fn transform_game_rect_to_raster(&self,
+                                game: &GameState,
+                                x: i32,
+                                y: i32,
+                                w: i32,
+                                h: i32,
+                                direction: &Direction)
+        -> sdl2::rect::Rect
+    {
+        return sdl2::rect::Rect::new(0,0,0,0);
+    }
+
+    fn draw_bounding_box(&mut self,
+                         pt_px: &(i32, i32),
+                         direction: &Direction,
+                         partial_px: i32)
+    {
+        let adj: i32 = 0; // self.radius_px as i32; // + partial_px;
+
+        let bounding_partial: (i32, i32) = match direction {
+            Direction::Up => (0, adj),
+            Direction::Down => (0, -adj),
+            Direction::Left => (adj, 0),
+            Direction::Right => (-adj, 0),
+        };
+
+        let bounding = sdl2::rect::Rect::new (
+            pt_px.0 as i32 + CELL_MARGIN_PX as i32 + bounding_partial.0,
+            pt_px.1 as i32 + CELL_MARGIN_PX as i32 + bounding_partial.1,
+            (GAME_TO_PIXEL - (2 * CELL_MARGIN_PX)) as u32,
+            (GAME_TO_PIXEL - (2 * CELL_MARGIN_PX)) as u32,
+        );
+
+        self.canvas.set_draw_color(RED);
+        let _ = self.canvas.draw_rect(bounding);
+    }
+}
+
+impl SDLContext<'_> {
+    fn draw(&mut self, game: &GameState) {
+
+        // update background
+        self.color_index = (self.color_index + 1) % 255;
+        // self.canvas.set_draw_color(sdl2::pixels::Color::RGB(self.color_index, 64, 255 - self.color_index));
+        self.canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
+        self.canvas.clear();
+
+        self.canvas.set_draw_color(RED);
+        let _ = self.canvas.fill_rect(sdl2::rect::Rect::new(20, 100, 200, 50));
+
+        self.canvas.pie(500, 500, 50, 0, 59, sdl2::pixels::Color::RGB(128, 128, 255));
+
+        self.draw_food(&(0,0));
+        /*
+        game logic down here
+        */
+
+        // render the grid
+        for y in 0..HEIGHT as usize {
+            for x in 0..WIDTH as usize {
+                match &game.get_world()[y][x] {
+                    ItemType::Nothing => (),
+                    ItemType::Food => self.draw_food(&(x, y)),
+                    // ItemType::SnakeBit | ItemType::SnakeHead | ItemType::SnakeTail => self.draw_snake(x, y),
+                    _ => (),
+                }
+            }
+        }
+
+        self.stm.draw_snake(self.frame_percent, &game, &mut self.canvas);
+
+        self.canvas.present();
+
+        if RATE_LIMITED {
+            let cur_time: u64 = sdl2::TimerSubsystem::performance_counter(&self.timer);
+            let frame_elapsed: u64 = cur_time - self.last_frame_time;
+            let time_to_next_frame =
+                FRAME_DURATION - std::time::Duration::from_secs(frame_elapsed / self.timer_freq);
+
+            if time_to_next_frame > std::time::Duration::from_nanos(0) {
+                std::thread::sleep(time_to_next_frame);
+            }
+
+            self.last_frame_time = cur_time;
+        }
+    }
+
+    fn get_input(&mut self) -> InputType {
+        for event in self.event_pump.poll_iter() {
+            match event {
+                sdl2::event::Event::Quit { .. }
+                | sdl2::event::Event::KeyDown {
+                    keycode: Some(sdl2::keyboard::Keycode::Escape),
+                    ..
+                } => {
+                    return InputType::Quit;
+                }
+                sdl2::event::Event::KeyDown {
+                    keycode: Some(sdl2::keyboard::Keycode::Q),
+                    ..
+                } => {
+                    return InputType::Quit;
+                }
+                sdl2::event::Event::KeyDown {
+                    keycode: Some(sdl2::keyboard::Keycode::Up),
+                    ..
+                } => {
+                    return InputType::Up;
+                }
+                sdl2::event::Event::KeyDown {
+                    keycode: Some(sdl2::keyboard::Keycode::Right),
+                    ..
+                } => {
+                    return InputType::Right;
+                }
+                sdl2::event::Event::KeyDown {
+                    keycode: Some(sdl2::keyboard::Keycode::Down),
+                    ..
+                } => {
+                    return InputType::Down;
+                }
+                sdl2::event::Event::KeyDown {
+                    keycode: Some(sdl2::keyboard::Keycode::Left),
+                    ..
+                } => {
+                    return InputType::Left;
+                }
+                _ => InputType::Nothing,
+            };
+        }
+        return InputType::Nothing;
+    }
+}
