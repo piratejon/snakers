@@ -1,4 +1,6 @@
 // provides pie and filled_pie for sdl2::render::Canvas
+// bezier and filled_pie (maybe other primitives) did not appear when drawn on a RGB888 surface,
+// showed up on RGBA8888
 use sdl2::gfx::primitives::DrawRenderer;
 
 use sdl2::gfx::rotozoom::RotozoomSurface;
@@ -53,7 +55,7 @@ fn main() {
         event_pump: &mut sdl_context.event_pump().unwrap(),
     };
 
-    ctx.draw();
+    ctx.bezier_test();
 
     while ctx.get_input() {
         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -180,7 +182,7 @@ fn identity(bitmap_index: usize, width: usize, bpp: usize) -> usize {
     return xyc_to_index(x_px, y_px, channel, width, bpp);
 }
 
-fn fill_surface(d: i32, fmt: sdl2::pixels::PixelFormatEnum) -> sdl2::surface::Surface<'static> {
+fn fill_surface_random(d: i32, fmt: sdl2::pixels::PixelFormatEnum) -> sdl2::surface::Surface<'static> {
     let mut s = sdl2::surface::Surface::new(d as u32, d as u32, fmt).unwrap();
 
     // create random data
@@ -196,6 +198,59 @@ fn fill_surface(d: i32, fmt: sdl2::pixels::PixelFormatEnum) -> sdl2::surface::Su
     s.fill_rect(sdl2::rect::Rect::new(0, 0, 10, 10), sdl2::pixels::Color::RGB(0,127,255));
 
     return s;
+}
+
+fn fill_surface_bezier(d: i32, fmt: sdl2::pixels::PixelFormatEnum) -> sdl2::surface::Surface<'static> {
+    let mut s = sdl2::surface::Surface::new(d as u32, d as u32, fmt).unwrap();
+
+    let mut canvas = s.into_canvas().unwrap();
+
+    canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
+    canvas.clear();
+
+    canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 255, 0));
+
+    // let mut rng = rand::thread_rng();
+
+    // anywhere from 3 to 7 pts
+    // normally distributed about the "edge"
+    // y component is beta-1/2-distributed between 0 and end
+
+    let n: usize = rand::thread_rng().gen_range(3..=7);
+
+    let razor_margin = (0.05 * d as f64) as i16;
+    let snake_edge_width = (0.15 * d as f64) as i16;
+
+    let gen_xs = rand::distributions::Uniform::new(razor_margin, snake_edge_width);
+    let gen_ys = rand::distributions::Uniform::new(razor_margin, d as i16 - razor_margin);
+
+    let xs: Vec<i16> = rand::thread_rng()
+        .sample_iter(&gen_xs)
+        .take(n)
+        .collect();
+
+    let mut ys: Vec<i16> = rand::thread_rng()
+        .sample_iter(gen_ys)
+        .take(n - 2)
+        .collect::<Vec<i16>>();
+
+    ys.push(0);
+    ys.push((d - 1) as i16);
+
+    ys.sort();
+
+    println!("{:?}, {:?}", xs, ys);
+
+    // snake body is 2 beziers with control points centered around lines 20% in from the edge
+    let x = canvas.bezier(&xs, &ys, n as i32, GREEN);
+
+    // canvas.present();
+
+    let mut s2 = canvas.into_surface();
+
+    // s2.fill_rect(sdl2::rect::Rect::new(0, 0, 10, 10), sdl2::pixels::Color::RGB(0,127,255));
+
+    return s2;
 }
 
 impl SDLContext<'_> {
@@ -214,7 +269,7 @@ impl SDLContext<'_> {
 
         let mut dsts: Vec<sdl2::surface::Surface> = vec![];
 
-        for i in 0..8 {
+        for i in 0..3 {
             dsts.push(sdl2::surface::Surface::new(w, h, fmt).unwrap());
         }
 
@@ -227,6 +282,7 @@ impl SDLContext<'_> {
             });
         });
 
+        /*
         // copy, then rotate-self
         ssrc.blit(None, &mut dsts[1], None);
         dsts[1].rotate_90deg(1);
@@ -240,10 +296,11 @@ impl SDLContext<'_> {
                 }
             });
         });
+        */
 
         // forward transform
         ssrc.with_lock(|src| {
-            dsts[3].with_lock_mut(|dst| {
+            dsts[1].with_lock_mut(|dst| {
                 for (i, e) in src.iter().enumerate() {
                     let i1 = forward_transform(i, w as usize, bpp as usize);
                     if i1 >= 0 && i1 < pixel_buffer_size {
@@ -255,7 +312,7 @@ impl SDLContext<'_> {
 
         // reverse transform
         ssrc.with_lock(|src| {
-            dsts[4].with_lock_mut(|dst| {
+            dsts[2].with_lock_mut(|dst| {
                 for i in 0..pixel_buffer_size {
                     if let Some(i1) = reverse_transform(i, w as usize, bpp as usize, 0.0, 1.0) {
                         if i1 >= 0 && i1 < pixel_buffer_size {
@@ -266,6 +323,7 @@ impl SDLContext<'_> {
             });
         });
 
+        /*
         // identity transform
         ssrc.with_lock(|src| {
             dsts[5].with_lock_mut(|dst| {
@@ -298,6 +356,7 @@ impl SDLContext<'_> {
                 }
             }
         });
+        */
 
         let mut texs: Vec<sdl2::render::Texture> = vec![];
 
@@ -311,7 +370,7 @@ impl SDLContext<'_> {
         }
     }
 
-    fn draw(&mut self) {
+    fn small_big_compare(&mut self) {
         // self.canvas.set_draw_color(sdl2::pixels::Color::RGB(self.color_index, 64, 255 - self.color_index));
         self.canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
         self.canvas.clear();
@@ -323,7 +382,7 @@ impl SDLContext<'_> {
 
         let fmt = sdl2::pixels::PixelFormatEnum::RGB24;
 
-        let s60: sdl2::surface::Surface = fill_surface(big, fmt);
+        let s60: sdl2::surface::Surface = fill_surface_random(big, fmt);
 
         let mut s59 = sdl2::surface::Surface::new(small, small, fmt).unwrap();
 
@@ -343,6 +402,30 @@ impl SDLContext<'_> {
 
         test_transform_roundtrip(30,49,0,60,3);
         test_transform_roundtrip(30,49,0,59,3);
+
+        self.canvas.present();
+    }
+
+    fn bezier_test(&mut self) {
+        // self.canvas.set_draw_color(sdl2::pixels::Color::RGB(self.color_index, 64, 255 - self.color_index));
+        // self.canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
+        self.canvas.clear();
+
+        let fmt = sdl2::pixels::PixelFormatEnum::RGBA8888;
+
+        let bezier_surface: sdl2::surface::Surface = fill_surface_bezier(200, fmt);
+
+        self.pixel_test(100, 100, &bezier_surface, 4);
+
+        for i in 0..59 {
+            transform_test(60, i, i);
+            transform_test(59, i, i);
+        }
+
+        test_transform_roundtrip(30,49,0,60,3);
+        test_transform_roundtrip(30,49,0,59,3);
+
+        let x = self.canvas.bezier(&[40, 80, 30, 40], &[0, 50, 150, 199], 3, BLACK);
 
         self.canvas.present();
     }
