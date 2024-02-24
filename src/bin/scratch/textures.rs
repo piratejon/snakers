@@ -269,7 +269,7 @@ impl SDLContext<'_> {
 
         let mut dsts: Vec<sdl2::surface::Surface> = vec![];
 
-        for i in 0..3 {
+        for i in 0..4 {
             dsts.push(sdl2::surface::Surface::new(w, h, fmt).unwrap());
         }
 
@@ -322,6 +322,14 @@ impl SDLContext<'_> {
                 }
             });
         });
+
+        // rotozoom then copy
+        let rzed = ssrc.rotozoom(30_f64,
+                                 1.0,
+                                 false).unwrap();
+        println!("ssrc: ({},{})", ssrc.width(), ssrc.height());
+        println!("rzed: ({},{})", rzed.width(), rzed.height());
+        rzed.blit(sdl2::rect::Rect::new(0, 0, w, h), &mut dsts[3], None);
 
         /*
         // identity transform
@@ -413,7 +421,7 @@ impl SDLContext<'_> {
 
         let fmt = sdl2::pixels::PixelFormatEnum::RGBA8888;
 
-        let bezier_surface: sdl2::surface::Surface = fill_surface_bezier(200, fmt);
+        let bezier_surface: sdl2::surface::Surface = fill_surface_bezier(100, fmt);
 
         self.pixel_test(100, 100, &bezier_surface, 4);
 

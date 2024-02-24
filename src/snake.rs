@@ -176,15 +176,6 @@ impl Direction {
             Direction::Left => Coord::new(-1, 0),
         }
     }
-
-    pub fn get_angle(&self) -> i16 {
-        match self {
-            Direction::Up => 270,
-            Direction::Right => 0,
-            Direction::Down => 90,
-            Direction::Left => 180,
-        }
-    }
 }
 
 pub type GridType = Vec<Vec<ItemType>>;

@@ -64,8 +64,6 @@ trait SnakeGameRenderTrait {
                                 w: i32,
                                 h: i32,
                                 direction: &Direction) -> sdl2::rect::Rect;
-
-    fn draw_bounding_box(&mut self, pt_px: &(i32, i32), direction: &Direction, partial_px: i32);
 }
 
 fn main() {
@@ -221,30 +219,6 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         return sdl2::rect::Rect::new(0,0,0,0);
     }
 
-    fn draw_bounding_box(&mut self,
-                         pt_px: &(i32, i32),
-                         direction: &Direction,
-                         partial_px: i32)
-    {
-        let adj: i32 = 0; // self.radius_px as i32; // + partial_px;
-
-        let bounding_partial: (i32, i32) = match direction {
-            Direction::Up => (0, adj),
-            Direction::Down => (0, -adj),
-            Direction::Left => (adj, 0),
-            Direction::Right => (-adj, 0),
-        };
-
-        let bounding = sdl2::rect::Rect::new (
-            pt_px.0 as i32 + CELL_MARGIN_PX as i32 + bounding_partial.0,
-            pt_px.1 as i32 + CELL_MARGIN_PX as i32 + bounding_partial.1,
-            (GAME_TO_PIXEL - (2 * CELL_MARGIN_PX)) as u32,
-            (GAME_TO_PIXEL - (2 * CELL_MARGIN_PX)) as u32,
-        );
-
-        self.canvas.set_draw_color(RED);
-        let _ = self.canvas.draw_rect(bounding);
-    }
 }
 
 impl SDLContext<'_> {

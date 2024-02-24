@@ -1,12 +1,14 @@
 
 use sdl2::gfx::primitives::DrawRenderer;
 
+use sdl2::gfx::rotozoom::RotozoomSurface;
+
 use snake::Direction;
 use snake::CoordWithDirection;
 use snake::GameState;
 
-const SNAKE_COLOR_LIGHT: sdl2::pixels::Color = sdl2::pixels::Color::RGB(0, 200, 50);
-const SNAKE_COLOR_DARK: sdl2::pixels::Color = sdl2::pixels::Color::RGB(0, 150, 60);
+const SNAKE_COLOR_LIGHT: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 200, 50, 255);
+const SNAKE_COLOR_DARK: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 150, 60, 255);
 
 pub struct SnakeTextureManager<'a> {
     head: sdl2::surface::Surface<'a>,
@@ -19,16 +21,54 @@ pub struct SnakeTextureManager<'a> {
     snake_width: i16,
 }
 
-impl SnakeTextureManager<'_> {
+impl<'a> SnakeTextureManager<'a> {
     pub fn new(tile_dimension: u32, tile_margin: u32) -> Self {
+
+        let snake_width: i16 = (tile_dimension - (2 * tile_margin)) as i16;
+
+        let head: sdl2::surface::Surface = *Self::create_head_surface(tile_dimension, snake_width);
+
         return SnakeTextureManager {
-            head: sdl2::surface::Surface::new(tile_dimension, tile_dimension, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap(),
+            head: head,
             bits: std::collections::LinkedList::new(),
             tail: sdl2::surface::Surface::new(tile_dimension, tile_dimension, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap(),
             tile_dimension: tile_dimension,
             tile_margin: tile_margin,
-            snake_width: (tile_dimension - (2 * tile_margin)) as i16,
+            snake_width: snake_width,
         };
+    }
+
+    fn get_direction_angle(&snake::Direction) -> i16 {
+        match self {
+            Direction::Up => 270,
+            Direction::Right => 0,
+            Direction::Down => 90,
+            Direction::Left => 180,
+        }
+    }
+
+    // draw the head facing right (angle 0) and no partial/adjustment
+    fn create_head_surface(tile_dimension: u32, snake_width: i16) -> Box<sdl2::surface::Surface<'a>> {
+
+        let mut head: sdl2::surface::Surface = sdl2::surface::Surface::new(tile_dimension, tile_dimension, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+
+        let mut head_canvas = head.into_canvas().unwrap();
+
+        // transparent background
+        head_canvas.set_draw_color(sdl2::pixels::Color::RGBA(0,0,0,0));
+        head_canvas.clear();
+
+        // draw a filled pie slice counter-clockwise
+        let _ = head_canvas.filled_pie(
+            0,                         // left edge
+            tile_dimension as i16 / 2, // halfway down
+            snake_width / 2,           // radius
+            270,                       // bottom
+            90,                        // top
+            SNAKE_COLOR_LIGHT
+        );
+
+        Box::new(head_canvas.into_surface())
     }
 
     pub fn draw_snake(&mut self,
@@ -65,17 +105,53 @@ impl SnakeTextureManager<'_> {
         }
     }
 
+    /*
+     * head is drawn lagged by the radius in the direction it came from so that it never exceeds
+     * its box in the forward direction (otherwise it looks like a collision when there isn't one).
+     *
+     * when the snake changes direction:
+     *  * the head gets a frame_percent angle along prevbit's nextdir to the new direction
+     *  * the prevbit gets the same angle on its leading "half" (whatever portion has entered the
+     *  new grid). the back "half" follows the same logic for changing direction.
+     * */
     fn draw_animated_snake_head(&mut self,
                                 frame_percent: f64,
                                 game: &GameState,
                                 at: &CoordWithDirection,
-                                next: Option<&CoordWithDirection>,
+                                prev: Option<&CoordWithDirection>,
                                 canvas: &mut sdl2::render::Canvas<sdl2::video::Window>)
     {
         let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
         let pt_px: (i32, i32) = (pt.0 as i32 * self.tile_dimension as i32, pt.1 as i32 * self.tile_dimension as i32);
 
         let partial_px: i32 = (self.tile_dimension as f64 * frame_percent) as i32;
+
+        // calculate angle
+        let target_angle = Self::get_direction_angle(at.dir_next);
+        let reverse_angle = match prev {
+            Some(d) => Self::get_direction_angle(d),
+            _ => target_angle
+        };
+
+        let mut forward_angle = reverse_angle as f64 + ((target_angle - reverse_angle) as f64 * frame_percent);
+
+        // clamp the angle
+        while forward_angle >= 360.0 {
+            forward_angle = forward_angle - 360.0;
+        }
+        while forward_angle < 0.0 {
+            forward_angle = forward_angle + 360.0;
+        }
+
+        // rotate it
+        let rotated_surface = self.head.rotozoom(forward_angle as f64,
+                                                 1.0,    // zoom
+                                                 false); // anti-aliasing
+
+        // calculate the top left of the where to blit from in the rotated frame
+        // root of head is (r sin t, r cos t).
+        // root should be translated to target position
+        // target position is
 
         let WHOLE: i16 = self.tile_dimension as i16;
         let HALF: i16 = WHOLE / 2;
@@ -91,17 +167,6 @@ impl SnakeTextureManager<'_> {
             (pt.0 as u32 * self.tile_dimension) as i16 + adjust.0,
             (pt.1 as u32 * self.tile_dimension) as i16 + adjust.1,
         );
-
-        let _ = canvas.filled_pie(
-            center.0,
-            center.1,
-            self.snake_width / 2,
-            adjust.2,
-            adjust.3,
-            SNAKE_COLOR_LIGHT
-        );
-
-        // self.draw_bounding_box(&pt_px, &at.dir_next, partial_px);
     }
 
     fn draw_animated_snake_bit (&mut self,
@@ -229,11 +294,6 @@ impl SnakeTextureManager<'_> {
     }
 }
 
-
-
-
-
-
 fn rotate_rect(center: &(i32, i32), rect: &sdl2::rect::Rect, direction: &Direction) -> sdl2::rect::Rect {
 
     // rotation is CCW
@@ -271,4 +331,3 @@ fn rotate_rect(center: &(i32, i32), rect: &sdl2::rect::Rect, direction: &Directi
 
     return out;
 }
-
