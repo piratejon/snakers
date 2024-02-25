@@ -9,7 +9,7 @@ use crate::textures::SnakeTextureManager;
 use ::snake::InputType;
 use ::snake::ItemType;
 use ::snake::GameState;
-use ::snake::CoordWithDirection;
+// use ::snake::CoordWithDirection;
 use ::snake::Direction;
 use ::snake::StateTransition;
 
@@ -26,7 +26,7 @@ const HEIGHT: u32 = HEIGHT_PIXELS / GAME_TO_PIXEL;
 const FRAMES_PER_SECOND: f64 = 30.0;
 const FRAME_DURATION: std::time::Duration = std::time::Duration::from_nanos((1_000_000_000.0 / FRAMES_PER_SECOND) as u64);
 
-const RATE_LIMITED: bool = true;
+const RATE_LIMITED: bool = false;
 
 const TICKS_PER_SECOND: f64 = 4.0;
 const TICK_DURATION: std::time::Duration = std::time::Duration::from_nanos((1_000_000_000.0 / TICKS_PER_SECOND) as u64);
@@ -35,11 +35,17 @@ const FOOD_COLOR: sdl2::pixels::Color = sdl2::pixels::Color::RGB(200, 200, 20);
 const RED: sdl2::pixels::Color = sdl2::pixels::Color::RGB(255, 0, 0);
 const BLUE: sdl2::pixels::Color = sdl2::pixels::Color::RGB(0, 0, 255);
 
+/*
+ * lifetime notes
+ * event_pump and timer are only used in this file.
+ * canvas may be needed by texturemanager to render things -- pass a reference on point of need
+ * stm also needs canvas or texture_creator to create textures, during init.
+ * */
+
 struct SDLContext<'a> {
-    color_index: u8,
-    event_pump: &'a mut sdl2::EventPump,
-    canvas: &'a mut sdl2::render::Canvas<sdl2::video::Window>,
-    timer: &'a mut sdl2::TimerSubsystem,
+    event_pump: sdl2::EventPump,
+    canvas: sdl2::render::Canvas<sdl2::video::Window>,
+    timer: sdl2::TimerSubsystem,
 
     timer_freq: u64,
     start_time: u64,
@@ -53,46 +59,38 @@ struct SDLContext<'a> {
     stm: SnakeTextureManager<'a>,
 }
 
-trait SnakeGameRenderTrait {
-
-    fn draw_food(&mut self, at: &(usize, usize));
-
-    fn transform_game_rect_to_raster(&self,
-                                game: &GameState,
-                                x: i32,
-                                y: i32,
-                                w: i32,
-                                h: i32,
-                                direction: &Direction) -> sdl2::rect::Rect;
-}
-
 fn main() {
 
     let sdl_context = sdl2::init().unwrap();
 
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem
+    let mut window = video_subsystem
         .window("snake.rs - SDL2 Driver", WIDTH_PIXELS, HEIGHT_PIXELS)
         .position(0, 0)
         .build()
         .unwrap();
 
-    let mut canvas = Some(window.into_canvas().build().unwrap());
+    let mut display_mode = window.display_mode().unwrap();
 
-    if let Some(ref mut canvas_here) = canvas {
-        canvas_here.set_draw_color(sdl2::pixels::Color::RGB(0, 255, 255));
-        canvas_here.clear();
-        canvas_here.present();
-    }
+    display_mode.format = sdl2::pixels::PixelFormatEnum::RGBA8888;
 
-    let timer = sdl_context.timer();
+    window.set_display_mode(display_mode);
+
+    let timer = sdl_context.timer().unwrap();
+
+    let canvas = window.into_canvas().build().unwrap();
+
+    let texture_creator = canvas.texture_creator();
+
+    let stm = SnakeTextureManager::new(GAME_TO_PIXEL, CELL_MARGIN_PX, &texture_creator);
+
+    // let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut ctx: SDLContext = SDLContext {
-        color_index: 0,
-        canvas: &mut canvas.unwrap(),
-        event_pump: &mut sdl_context.event_pump().unwrap(),
-        timer: &mut timer.unwrap(),
+        canvas: canvas,
+        event_pump: sdl_context.event_pump().unwrap(),
+        timer: timer,
         timer_freq: 0,
         start_time: 0,
         last_frame_time: 0,
@@ -100,7 +98,7 @@ fn main() {
         frame_counter: 0,
         tick_counter: 0,
         frame_percent: 0.0,
-        stm: SnakeTextureManager::new(GAME_TO_PIXEL, CELL_MARGIN_PX),
+        stm: stm,
     };
 
     ctx.last_frame_time = sdl2::TimerSubsystem::performance_counter(&ctx.timer);
@@ -191,8 +189,7 @@ fn rotate_rect(center: &(i32, i32), rect: &sdl2::rect::Rect, direction: &Directi
     return out;
 }
 
-impl SnakeGameRenderTrait for SDLContext<'_> {
-
+impl SDLContext<'_> {
     fn draw_food(&mut self, at: &(usize, usize)) {
         self.canvas.set_draw_color(FOOD_COLOR);
         let _ = self.canvas.fill_rect(sdl2::rect::Rect::new(
@@ -203,30 +200,9 @@ impl SnakeGameRenderTrait for SDLContext<'_> {
         ));
     }
 
-    /*
-     * given a point in the game, translate it to raster, rotated by direction, and with
-     * partial_frame
-     * */
-    fn transform_game_rect_to_raster(&self,
-                                game: &GameState,
-                                x: i32,
-                                y: i32,
-                                w: i32,
-                                h: i32,
-                                direction: &Direction)
-        -> sdl2::rect::Rect
-    {
-        return sdl2::rect::Rect::new(0,0,0,0);
-    }
-
-}
-
-impl SDLContext<'_> {
     fn draw(&mut self, game: &GameState) {
 
         // update background
-        self.color_index = (self.color_index + 1) % 255;
-        // self.canvas.set_draw_color(sdl2::pixels::Color::RGB(self.color_index, 64, 255 - self.color_index));
         self.canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
         self.canvas.clear();
 
@@ -235,7 +211,6 @@ impl SDLContext<'_> {
 
         self.canvas.pie(500, 500, 50, 0, 59, sdl2::pixels::Color::RGB(128, 128, 255));
 
-        self.draw_food(&(0,0));
         /*
         game logic down here
         */

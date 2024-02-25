@@ -36,11 +36,21 @@ fn main() {
 
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem
+    let mut window = video_subsystem
         .window("textures.rs - SDL2 Driver", WIDTH_PIXELS, HEIGHT_PIXELS)
         .position(0, 0)
         .build()
         .unwrap();
+
+    let mut display_mode = window.display_mode().unwrap();
+    println!("display_mode: {:?}", display_mode);
+
+    display_mode.format = sdl2::pixels::PixelFormatEnum::RGBA8888;
+
+    match window.set_display_mode(display_mode) {
+        Ok(_) => println!("set_display_mode OK!"),
+        Err(s) => println!("error setting display mode '{}'", s),
+    }
 
     let mut canvas = Some(window.into_canvas().build().unwrap());
 
@@ -375,6 +385,20 @@ impl SDLContext<'_> {
 
         for (i, tex) in texs.iter().enumerate() {
             self.canvas.copy(&tex, None, sdl2::rect::Rect::new(cx + (i as u32 * (w + 20)) as i32, cy, w as u32, h as u32));
+        }
+
+        for i in 0..8 {
+            let tx = cx + (i as u32 * (w + 20)) as i32;
+            let ty = cy + h as i32 + 50;
+            self.canvas.copy_ex(&texs[0],
+                                None,
+                                sdl2::rect::Rect::new(tx, ty, w, h),
+                                i as f64 * (360_f64 / 8_f64),
+                                None,
+                                false,
+                                false);
+
+            self.canvas.filled_circle(tx as i16, ty as i16, 3, RED);
         }
     }
 

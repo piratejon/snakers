@@ -1,8 +1,6 @@
 
 use sdl2::gfx::primitives::DrawRenderer;
 
-use sdl2::gfx::rotozoom::RotozoomSurface;
-
 use snake::Direction;
 use snake::CoordWithDirection;
 use snake::GameState;
@@ -11,9 +9,8 @@ const SNAKE_COLOR_LIGHT: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 200,
 const SNAKE_COLOR_DARK: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 150, 60, 255);
 
 pub struct SnakeTextureManager<'a> {
-    head: sdl2::surface::Surface<'a>,
+    head: sdl2::render::Texture<'a>,
     bits: std::collections::LinkedList<sdl2::surface::Surface<'a>>,
-    tail: sdl2::surface::Surface<'a>,
 
     tile_dimension: u32,
     tile_margin: u32,
@@ -22,24 +19,29 @@ pub struct SnakeTextureManager<'a> {
 }
 
 impl<'a> SnakeTextureManager<'a> {
-    pub fn new(tile_dimension: u32, tile_margin: u32) -> Self {
+    pub fn new(tile_dimension: u32,
+               tile_margin: u32,
+               texture_creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>)
+        -> Self
+    {
 
         let snake_width: i16 = (tile_dimension - (2 * tile_margin)) as i16;
 
-        let head: sdl2::surface::Surface = *Self::create_head_surface(tile_dimension, snake_width);
+        let head_texture = *Self::create_head_texture(tile_dimension, snake_width, texture_creator);
 
         return SnakeTextureManager {
-            head: head,
+            head: head_texture,
             bits: std::collections::LinkedList::new(),
-            tail: sdl2::surface::Surface::new(tile_dimension, tile_dimension, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap(),
+            // tail: sdl2::surface::Surface::new(tile_dimension, tile_dimension, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap(),
+
             tile_dimension: tile_dimension,
             tile_margin: tile_margin,
             snake_width: snake_width,
         };
     }
 
-    fn get_direction_angle(&snake::Direction) -> i16 {
-        match self {
+    fn get_direction_angle(direction: &snake::Direction) -> i16 {
+        match direction {
             Direction::Up => 270,
             Direction::Right => 0,
             Direction::Down => 90,
@@ -48,9 +50,14 @@ impl<'a> SnakeTextureManager<'a> {
     }
 
     // draw the head facing right (angle 0) and no partial/adjustment
-    fn create_head_surface(tile_dimension: u32, snake_width: i16) -> Box<sdl2::surface::Surface<'a>> {
-
-        let mut head: sdl2::surface::Surface = sdl2::surface::Surface::new(tile_dimension, tile_dimension, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+    fn create_head_texture(tile_dimension: u32,
+                           snake_width: i16,
+                           texture_creator: &sdl2::render::TextureCreator<sdl2::video::WindowContext>)
+        -> Box<sdl2::render::Texture>
+    {
+        let head: sdl2::surface::Surface = sdl2::surface::Surface::new(tile_dimension,
+                                                                       tile_dimension,
+                                                                       sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
 
         let mut head_canvas = head.into_canvas().unwrap();
 
@@ -68,7 +75,9 @@ impl<'a> SnakeTextureManager<'a> {
             SNAKE_COLOR_LIGHT
         );
 
-        Box::new(head_canvas.into_surface())
+        let new_texture = head_canvas.into_surface().as_texture(&texture_creator).unwrap();
+
+        Box::new(new_texture)
     }
 
     pub fn draw_snake(&mut self,
@@ -78,7 +87,7 @@ impl<'a> SnakeTextureManager<'a> {
     {
         canvas.set_draw_color(SNAKE_COLOR_LIGHT);
 
-        let mut prev: Option<&CoordWithDirection> = None;
+        // let mut prev: Option<&CoordWithDirection> = None;
 
         let mut iter = game.get_snake().get_body().iter();
 
@@ -124,16 +133,19 @@ impl<'a> SnakeTextureManager<'a> {
         let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
         let pt_px: (i32, i32) = (pt.0 as i32 * self.tile_dimension as i32, pt.1 as i32 * self.tile_dimension as i32);
 
-        let partial_px: i32 = (self.tile_dimension as f64 * frame_percent) as i32;
+        // let partial_px: i32 = (self.tile_dimension as f64 * frame_percent) as i32;
 
         // calculate angle
-        let target_angle = Self::get_direction_angle(at.dir_next);
-        let reverse_angle = match prev {
-            Some(d) => Self::get_direction_angle(d),
+        let target_angle = Self::get_direction_angle(&at.dir_next);
+        let incoming_angle = match prev {
+            Some(d) => Self::get_direction_angle(&d.dir_next),
             _ => target_angle
         };
 
-        let mut forward_angle = reverse_angle as f64 + ((target_angle - reverse_angle) as f64 * frame_percent);
+        let radius = self.snake_width as f64 / 2_f64;
+
+        // angle of forward direction
+        let mut forward_angle = incoming_angle as f64 + ((target_angle - incoming_angle) as f64 * frame_percent);
 
         // clamp the angle
         while forward_angle >= 360.0 {
@@ -143,30 +155,30 @@ impl<'a> SnakeTextureManager<'a> {
             forward_angle = forward_angle + 360.0;
         }
 
-        // rotate it
-        let rotated_surface = self.head.rotozoom(forward_angle as f64,
-                                                 1.0,    // zoom
-                                                 false); // anti-aliasing
+        // let (cx, cy) = (rotated_surface.width() / 2, rotated_surface.height() / 2);
 
-        // calculate the top left of the where to blit from in the rotated frame
-        // root of head is (r sin t, r cos t).
-        // root should be translated to target position
-        // target position is
+        let mut theta_prime = forward_angle + 180.0;
 
-        let WHOLE: i16 = self.tile_dimension as i16;
-        let HALF: i16 = WHOLE / 2;
+        while theta_prime >= 360.0 {
+            theta_prime = theta_prime - 360.0;
+        }
+        while theta_prime < 0.0 {
+            theta_prime = theta_prime + 360.0;
+        }
 
-        let adjust: (i16, i16, i16, i16) = match at.dir_next {
-            Direction::Up => (HALF, WHOLE - partial_px as i16 + (self.snake_width / 2), 179, 0),
-            Direction::Down => (HALF, partial_px as i16 - (self.snake_width / 2), 0, 179),
-            Direction::Right => (partial_px as i16 - (self.snake_width / 2), HALF, 269, 90),
-            Direction::Left => (WHOLE - partial_px as i16 + (self.snake_width / 2), HALF, 90, 269),
-        };
+        // find target root point in grid
+        let (tx, ty) = (radius * forward_angle.sin(), radius * forward_angle.cos());
 
-        let center = (
-            (pt.0 as u32 * self.tile_dimension) as i16 + adjust.0,
-            (pt.1 as u32 * self.tile_dimension) as i16 + adjust.1,
-        );
+        // translate rotated surface root point to grid
+        let (sx, sy) = (pt_px.0 - tx as i32, pt_px.1 - ty as i32);
+
+        canvas.copy_ex(&self.head, // texture
+                       None,       // src rect -- None = entire texture
+                       sdl2::rect::Rect::new(sx, sy, self.tile_dimension, self.tile_dimension), // dst rect
+                       forward_angle, // angle of rotation
+                       None,          // center for rotation -- None = dst (or src if dst None)
+                       false,         // flip_horizontal
+                       false);        // flip_vertical
     }
 
     fn draw_animated_snake_bit (&mut self,

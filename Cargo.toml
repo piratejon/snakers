@@ -2,8 +2,8 @@
 name = "prj"
 version = "0.1.0"
 edition = "2021"
-#default-run = "snakers-sdl2"
-default-run = "textures"
+default-run = "snakers-sdl2"
+#default-run = "textures"
 
 [lib]
 name = "snake"
