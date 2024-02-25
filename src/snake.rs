@@ -316,12 +316,14 @@ impl GameState {
         }
     }
 
-    fn advance_head(&mut self, new_head: &CoordWithDirection) {
+    fn advance_head(&mut self, new_head: &mut CoordWithDirection) {
         // advance the head
         let mut old_head = self.snake.body.front_mut().unwrap();
         old_head.dir_next = new_head.dir_prev.expect("head has elements behind it").get_opposite();
         let coord = old_head.coord.clone();
         self[&coord] = ItemType::SnakeBit;
+
+        // new_head.dir_prev = new_head.coord.direction_to(&coord);
 
         self.snake.body.push_front(*new_head);
         self[&new_head.coord] = ItemType::SnakeHead;
@@ -337,7 +339,7 @@ impl GameState {
         self[&coord] = ItemType::SnakeTail;
     }
 
-    fn move_snake(&mut self, new_head: &CoordWithDirection) {
+    fn move_snake(&mut self, new_head: &mut CoordWithDirection) {
         if self[&new_head.coord] == ItemType::Food {
             self.snake.growing += SNAKE_GROWTH_PER_FOOD;
             self.drop_new_food();
@@ -417,10 +419,10 @@ impl GameState {
         let old_head = self.snake.body.front().unwrap();
 
         match self.try_create_target(&old_head, &self.snake.direction) {
-            Some(new_head) => {
+            Some(mut new_head) => {
                 if self.snake_can_move(&new_head) {
                     // println!("old_head:{}; new_head:{}, dir:{:#?}", old_head, new_head, s.snake.direction);
-                    self.move_snake(&new_head);
+                    self.move_snake(&mut new_head);
                     return StateTransition::Continue;
                 } else {
                     return StateTransition::Stop;
@@ -446,7 +448,7 @@ impl GameState {
                         let out = CoordWithDirection {
                             dir_next: *d,
                             coord: target,
-                            dir_prev: Some(d.get_opposite()),
+                            dir_prev: Some(a.dir_next.get_opposite()),
                         };
                         // println!("created target {:?} from {:?}+{:?}", target, a, d);
                         return Some(out);

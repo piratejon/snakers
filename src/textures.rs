@@ -139,15 +139,17 @@ impl<'a> SnakeTextureManager<'a> {
         // let partial_px: i32 = (self.tile_dimension as f64 * frame_percent) as i32;
 
         // calculate angle
-        let target_angle = Self::get_direction_angle(&at.dir_next);
+        let target_angle: f64 = Self::get_direction_angle(&at.dir_next);
 
-        let incoming_angle = match prev {
-            Some(d) => Self::get_direction_angle(&d.dir_next),
+        let incoming_angle: f64 = match at.dir_prev {
+            Some(d) => Self::get_direction_angle(&d.get_opposite()),
             _       => target_angle
         };
 
         // angle of forward direction
-        let forward_angle = incoming_angle + ((target_angle - incoming_angle) * frame_percent);
+        let forward_angle: f64 = incoming_angle + ((target_angle - incoming_angle) * frame_percent);
+
+        // println!("%: {}, in:{}, fwd:{}, tgt:{}", frame_percent, incoming_angle, forward_angle, target_angle);
 
         // find target root point in grid
         let (tx, ty) = (self.half_snake_width_f64 * forward_angle.sin(),
