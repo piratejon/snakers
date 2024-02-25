@@ -65,7 +65,7 @@ impl<'a> SnakeTextureManager<'a> {
         let mut head_canvas = head.into_canvas().unwrap();
 
         // transparent background
-        head_canvas.set_draw_color(sdl2::pixels::Color::RGBA(0,0,0,0));
+        head_canvas.set_draw_color(sdl2::pixels::Color::RGBA(255,0,0,128));
         head_canvas.clear();
 
         // draw a filled pie slice counter-clockwise
@@ -136,27 +136,44 @@ impl<'a> SnakeTextureManager<'a> {
         let pt_px: (i32, i32) = (pt.0 as i32 * self.tile_dimension as i32,
                                  pt.1 as i32 * self.tile_dimension as i32);
 
-        // let partial_px: i32 = (self.tile_dimension as f64 * frame_percent) as i32;
-
         // calculate angle
-        let target_angle: f64 = Self::get_direction_angle(&at.dir_next);
+        let target_direction = at.dir_next;
 
-        let incoming_angle: f64 = match at.dir_prev {
-            Some(d) => Self::get_direction_angle(&d.get_opposite()),
-            _       => target_angle
+        let incoming_direction = match at.dir_prev {
+            Some(d) => d.get_opposite(),
+            _       => target_direction,
         };
 
-        // angle of forward direction
-        let forward_angle: f64 = incoming_angle + ((target_angle - incoming_angle) * frame_percent);
+        let target_angle: f64 = Self::get_direction_angle(&target_direction);
+        let incoming_angle: f64 = Self::get_direction_angle(&incoming_direction);
 
-        // println!("%: {}, in:{}, fwd:{}, tgt:{}", frame_percent, incoming_angle, forward_angle, target_angle);
+        // angle of forward direction
+        let forward_angle: f64 = match (incoming_direction, target_direction) {
+            // rotate special cases in correct direction
+            (snake::Direction::Up, snake::Direction::Right)
+                => incoming_angle + ((360.0 - incoming_angle) * frame_percent),
+
+            (snake::Direction::Right, snake::Direction::Up)
+                => 360.0 + ((target_angle - 360.0) * frame_percent),
+
+            // general case rotates in correct direction
+            _   => incoming_angle + ((target_angle - incoming_angle) * frame_percent),
+        };
 
         // find target root point in grid
         let (tx, ty) = (self.half_snake_width_f64 * forward_angle.sin(),
                         self.half_snake_width_f64 * forward_angle.cos());
 
         // translate rotated surface root point to grid
-        let (sx, sy) = (pt_px.0 - tx as i32, pt_px.1 - ty as i32);
+        let (sx, sy) = pt_px; // (pt_px.0 - tx as i32, pt_px.1 - ty as i32);
+
+        println!("%:{}, in:{}, fwd:{:.1}, tgt:{}, t:({:.1},{:.1}), s:({},{})",
+                 frame_percent,
+                 incoming_angle,
+                 forward_angle,
+                 target_angle,
+                 tx,ty,
+                 sx,sy);
 
         canvas.copy_ex(&self.head,    // texture
                        None,          // src rect -- None = entire texture
