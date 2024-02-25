@@ -106,15 +106,11 @@ impl CoordWithDirection {
 }
 
 pub struct SnakeType {
-    direction: Direction,
     body: LinkedList<CoordWithDirection>,
     growing: i32,
 }
 
 impl SnakeType {
-    pub fn get_direction(&self) -> Direction {
-        self.direction
-    }
     pub fn get_body(&self) -> &LinkedList<CoordWithDirection> {
         &(self.body)
     }
@@ -234,7 +230,7 @@ impl GameState {
             world: init_grid(width, height),
 
             snake: SnakeType {
-                direction: Direction::Up,
+                // direction: Direction::Up,
                 body: LinkedList::new(),
                 growing: 0,
             },
@@ -274,19 +270,29 @@ impl GameState {
             InputType::Quit => StateTransition::Stop,
             InputType::Nothing => StateTransition::Continue,
             _ => {
+
+                // TODO does this count as handling the input twice?
                 self.pending_input = input;
-                self.snake.direction = match input_get_direction(input) {
+
+                // update head next_dir if it is not trying to go back on itself which is "not
+                // supported"
+
+                let head = self.snake.body.front_mut().unwrap(); // all snakes have a head
+
+                // if there is no dir_prev we can update to any direction
+                // if there is a dir_prev, we cannot update to that direction
+
+                head.dir_next = match input.get_direction() {
                     Some(d) => {
-
-                        if let Some(mut head) = self.snake.body.front_mut() {
-                            head.dir_next = d;
+                        if Some(d) != head.dir_prev {
+                            d
+                        } else {
+                            head.dir_next
                         }
-
-                        d
                     },
-                    None => self.snake.direction,
+                    None => head.dir_next,
                 };
-                // println!("handling {:?}", k);
+
                 return StateTransition::Continue;
             },
         }
@@ -302,12 +308,12 @@ impl GameState {
 
     fn process_input(&mut self) -> StateTransition {
         match self.pending_input {
-            d @ InputType::Up
-            | d @ InputType::Right
-            | d @ InputType::Down
-            | d @ InputType::Left => {
+            input @ InputType::Up
+            | input @ InputType::Right
+            | input @ InputType::Down
+            | input @ InputType::Left => {
                 self.pending_input = InputType::Nothing;
-                return self.handle_direction(input_get_direction(d).unwrap())
+                return self.handle_direction(input.get_direction().unwrap())
             },
             InputType::Quit => StateTransition::Stop,
             _ => StateTransition::Continue,
@@ -329,12 +335,10 @@ impl GameState {
 
     fn advance_head(&mut self, new_head: &mut CoordWithDirection) {
         // advance the head
-        let mut old_head = self.snake.body.front_mut().unwrap();
+        let old_head = self.snake.body.front_mut().unwrap();
         old_head.dir_next = new_head.dir_prev.expect("head has elements behind it").get_opposite();
         let coord = old_head.coord.clone();
         self[&coord] = ItemType::SnakeBit;
-
-        // new_head.dir_prev = new_head.coord.direction_to(&coord);
 
         self.snake.body.push_front(*new_head);
         self[&new_head.coord] = ItemType::SnakeHead;
@@ -401,7 +405,6 @@ impl GameState {
 
             if y == 0 {
                 self[&at] = ItemType::SnakeHead;
-                self.snake.direction = Direction::Up;
             } else if y < (INITIAL_SNAKE_LENGTH - 1) {
                 self[&at] = ItemType::SnakeBit;
             } else {
@@ -417,7 +420,7 @@ impl GameState {
         }
     }
 
-    fn print_snake(&self) {
+    pub fn print_snake(&self) {
         for s in self.snake.body.iter() {
             println!("{:?}:{}:{:?}", s.dir_next, s.coord, s.dir_prev);
         }
@@ -429,10 +432,9 @@ impl GameState {
 
         let old_head = self.snake.body.front().unwrap();
 
-        match self.try_create_target(&old_head, &self.snake.direction) {
+        match self.try_create_target(&old_head) {
             Some(mut new_head) => {
                 if self.snake_can_move(&new_head) {
-                    // println!("old_head:{}; new_head:{}, dir:{:#?}", old_head, new_head, s.snake.direction);
                     self.move_snake(&mut new_head);
                     return StateTransition::Continue;
                 } else {
@@ -443,7 +445,9 @@ impl GameState {
         }
     }
 
-    fn try_create_target(&self, a: &CoordWithDirection, d: &Direction) -> Option<CoordWithDirection> {
+    fn try_create_target(&self, a: &CoordWithDirection) -> Option<CoordWithDirection> {
+
+        let d = a.dir_next;
 
         let uv = d.direction_get_unit_vector();
 
@@ -457,7 +461,7 @@ impl GameState {
                 if new_y >= self.yrange.0 {
                     if new_y <= self.yrange.1 {
                         let out = CoordWithDirection {
-                            dir_next: *d,
+                            dir_next: d,
                             coord: target,
                             dir_prev: Some(a.dir_next.get_opposite()),
                         };
@@ -485,21 +489,21 @@ impl GameState {
             (at.0 - self.xrange.0) as usize,
             (at.1 - self.yrange.0) as usize,
         );
-        // println!("({},{}) -> ({},{})", at.0, at.1, g.0, g.1);
         return (g.0, g.1);
     }
 
     fn handle_direction(&mut self, direction: Direction) -> StateTransition {
-        if self.snake.direction != direction.get_disallowed() {
+        let head = self.snake.body.front_mut().unwrap();
+        if head.dir_next != direction.get_disallowed() {
             println!(
                 "changing direction from {:?} to {:?}",
-                self.snake.direction, direction
+                head.dir_next, direction
             );
-            self.snake.direction = direction;
+            head.dir_next = direction;
         } else {
             println!(
                 "not changing direction from {:?} to {:?}",
-                self.snake.direction, direction
+                head.dir_next, direction
             );
         }
         StateTransition::Continue
@@ -536,16 +540,6 @@ impl std::ops::IndexMut<&Coord> for GameState {
     }
 }
 
-fn input_get_direction(input: InputType) -> Option<Direction> {
-    match input {
-        InputType::Up => Some(Direction::Up),
-        InputType::Right => Some(Direction::Right),
-        InputType::Down => Some(Direction::Down),
-        InputType::Left => Some(Direction::Left),
-        _ => None,
-    }
-}
-
 // TODO use direction
 #[derive(PartialEq, Debug,Copy,Clone)]
 pub enum InputType {
@@ -555,4 +549,16 @@ pub enum InputType {
     Down,
     Left,
     Quit,
+}
+
+impl InputType {
+    fn get_direction(&self) -> Option<Direction> {
+        match self {
+            Self::Up => Some(Direction::Up),
+            Self::Right => Some(Direction::Right),
+            Self::Down => Some(Direction::Down),
+            Self::Left => Some(Direction::Left),
+            _ => None,
+        }
+    }
 }
