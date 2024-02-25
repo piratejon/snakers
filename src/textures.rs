@@ -5,10 +5,12 @@ use snake::Direction;
 use snake::CoordWithDirection;
 use snake::GameState;
 
-const SNAKE_COLOR_LIGHT: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 200, 50, 255);
+const SNAKE_COLOR_LIGHT: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 200, 50, 128);
 const SNAKE_COLOR_DARK: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 150, 60, 255);
 const RED: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(255, 0, 0, 255);
 const BLUE: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 0, 255, 255);
+const BLACK: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 0, 0, 255);
+const WHITE: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(255, 255, 255, 255);
 
 pub struct SnakeTextureManager<'a> {
     head: sdl2::render::Texture<'a>,
@@ -88,8 +90,6 @@ impl<'a> SnakeTextureManager<'a> {
     {
         canvas.set_draw_color(SNAKE_COLOR_LIGHT);
 
-        // let mut prev: Option<&CoordWithDirection> = None;
-
         let mut iter = game.get_snake().get_body().iter();
 
         if let Some(head) = iter.next() {
@@ -131,10 +131,10 @@ impl<'a> SnakeTextureManager<'a> {
                                 prev: Option<&CoordWithDirection>,
                                 canvas: &mut sdl2::render::Canvas<sdl2::video::Window>)
     {
-        let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
+        let pt_: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
 
-        let pt_px: (i32, i32) = (pt.0 as i32 * self.tile_dimension as i32,
-                                 pt.1 as i32 * self.tile_dimension as i32);
+        let pt: (i32, i32) = (pt_.0 as i32 * self.tile_dimension as i32,
+                              pt_.1 as i32 * self.tile_dimension as i32);
 
         // calculate angle
         let target_direction = at.dir_next;
@@ -160,12 +160,14 @@ impl<'a> SnakeTextureManager<'a> {
             _   => incoming_angle + ((target_angle - incoming_angle) * frame_percent),
         };
 
+        // find the real target point in grid
+
         // find target root point in grid
         let (tx, ty) = (self.half_snake_width_f64 * forward_angle.sin(),
                         self.half_snake_width_f64 * forward_angle.cos());
 
         // translate rotated surface root point to grid
-        let (sx, sy) = pt_px; // (pt_px.0 - tx as i32, pt_px.1 - ty as i32);
+        let (sx, sy) = pt; // (pt_px.0 - tx as i32, pt_px.1 - ty as i32);
 
         println!("%:{}, in:{}, fwd:{:.1}, tgt:{}, t:({:.1},{:.1}), s:({},{})",
                  frame_percent,
@@ -183,20 +185,43 @@ impl<'a> SnakeTextureManager<'a> {
                        false,         // flip_horizontal
                        false);        // flip_vertical
 
+        // try to draw a box around the rotated one
+
         let rect = sdl2::rect::Rect::new (
-            pt_px.0 as i32 + self.tile_margin as i32,
-            pt_px.1 as i32 + self.tile_margin as i32,
+            pt.0 as i32 + self.tile_margin as i32,
+            pt.1 as i32 + self.tile_margin as i32,
             self.snake_width as u32,
             self.snake_width as u32,
         );
 
         if incoming_angle == target_angle {
+            // not rotating
             canvas.set_draw_color(BLUE);
         } else {
+            // should be rotating
             canvas.set_draw_color(RED);
         }
 
         let _ = canvas.draw_rect(rect);
+
+        let gc = (pt.0 as i16 + (self.tile_dimension as f64 / 2.0) as i16,
+                  pt.1 as i16 + (self.tile_dimension as f64 / 2.0) as i16);
+
+        // draw the current grid center
+        let _ = canvas.filled_circle(gc.0, gc.1, 3, BLACK);
+
+        // draw dots at incoming and exiting points
+        let incoming_pt = (
+            gc.0 as i32 + tx as i32,
+            gc.1 as i32 + ty as i32,
+        );
+        let _ = canvas.filled_circle(
+            incoming_pt.0 as i16,
+            incoming_pt.1 as i16,
+            3, // radius
+            BLUE);
+
+        // draw a nice arc from incoming angle to target angle
     }
 
     fn draw_animated_snake_bit (&mut self,
@@ -250,7 +275,7 @@ impl<'a> SnakeTextureManager<'a> {
             );
             let rotated = rotate_rect(&c_px, &rect, &at.dir_next);
             canvas.set_draw_color(SNAKE_COLOR_LIGHT);
-            let _ = canvas.fill_rect(rotated);
+            let _ = canvas.draw_rect(rotated);
         }
 
         if curve_to_end {
@@ -268,59 +293,9 @@ impl<'a> SnakeTextureManager<'a> {
             );
             let rotated = rotate_rect(&c_px, &rect, &at.dir_next);
             canvas.set_draw_color(SNAKE_COLOR_LIGHT);
-            let _ = canvas.fill_rect(rotated);
+            let _ = canvas.draw_rect(rotated);
             // self.canvas.set_draw_color(RED); let _ = self.canvas.draw_rect(rotated);
         }
-
-        // self.draw_bounding_box(&pt_px, &at.dir_next, partial_px);
-
-        /*
-        let block: u32 = self.tile_dimension - (self.tile_margin * 2);
-        let mut partial_block: u32 = partial as u32;
-
-        let mut pos_adjust: i32 = block as i32;
-
-        let mut has_arc = true;
-
-        let mut full_block: bool = at.dir_prev == None || at.dir_prev == Some(at.dir_next.get_opposite());
-
-        if full_block {
-            has_arc = false;
-            partial_block = block;
-            pos_adjust = partial;
-        }
-
-        let adjust: (i32, i32, u32, u32) = match at.dir_next {
-            Direction::Up => (0, -partial + self.radius_px as i32, block, partial_block), // ok
-            Direction::Down => (0, pos_adjust - self.radius_px as i32, block, partial_block), // ok
-            Direction::Right => (pos_adjust - self.radius_px as i32, 0, partial_block, block), // ok
-            Direction::Left => (-partial + self.radius_px as i32, 0, partial_block, block), // ok
-        };
-
-        let rect = sdl2::rect::Rect::new (
-            (pt_px.0 as u32 * self.tile_dimension) as i32 + self.tile_margin as i32 + adjust.0,
-            (pt_px.1 as u32 * self.tile_dimension) as i32 + self.tile_margin as i32 + adjust.1,
-            adjust.2,
-            adjust.3,
-        );
-
-        if adjust.2 > 0 && adjust.3 > 0 {
-            self.canvas.set_draw_color(SNAKE_COLOR);
-            let _ = self.canvas.fill_rect(rect);
-        }
-
-        // part after curve
-        if curve_to_end {
-            self.canvas.set_draw_color(RED);
-            let _ = self.canvas.draw_rect(rect);
-        }
-
-        // part before curve
-        if curve_from_start {
-            self.canvas.set_draw_color(BLUE);
-            let _ = self.canvas.draw_rect(rect);
-        }
-        */
     }
 }
 

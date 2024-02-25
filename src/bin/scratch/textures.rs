@@ -387,18 +387,20 @@ impl SDLContext<'_> {
             self.canvas.copy(&tex, None, sdl2::rect::Rect::new(cx + (i as u32 * (w + 20)) as i32, cy, w as u32, h as u32));
         }
 
-        for i in 0..8 {
+        for i in 0..12 {
             let tx = cx + (i as u32 * (w + 20)) as i32;
             let ty = cy + h as i32 + 50;
             self.canvas.copy_ex(&texs[0],
                                 None,
                                 sdl2::rect::Rect::new(tx, ty, w, h),
-                                i as f64 * (360_f64 / 8_f64),
+                                i as f64 * (360_f64 / 12_f64),
                                 None,
                                 false,
                                 false);
 
             self.canvas.filled_circle(tx as i16, ty as i16, 3, RED);
+
+            self.canvas.filled_circle((tx + (w / 2) as i32) as i16, (ty + (h / 2) as i32) as i16, 3, BLUE);
         }
     }
 

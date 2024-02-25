@@ -275,6 +275,17 @@ impl GameState {
             InputType::Nothing => StateTransition::Continue,
             _ => {
                 self.pending_input = input;
+                self.snake.direction = match input_get_direction(input) {
+                    Some(d) => {
+
+                        if let Some(mut head) = self.snake.body.front_mut() {
+                            head.dir_next = d;
+                        }
+
+                        d
+                    },
+                    None => self.snake.direction,
+                };
                 // println!("handling {:?}", k);
                 return StateTransition::Continue;
             },
