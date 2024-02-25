@@ -30,10 +30,8 @@ impl<'a> SnakeTextureManager<'a> {
 
         let snake_width: i16 = (tile_dimension - (2 * tile_margin)) as i16;
 
-        let head_texture = *Self::create_head_texture(tile_dimension, snake_width, texture_creator);
-
         return SnakeTextureManager {
-            head: head_texture,
+            head: Self::create_head_texture(tile_dimension, snake_width, texture_creator),
             bits: std::collections::LinkedList::new(),
             // tail: sdl2::surface::Surface::new(tile_dimension, tile_dimension, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap(),
 
@@ -58,7 +56,7 @@ impl<'a> SnakeTextureManager<'a> {
     fn create_head_texture(tile_dimension: u32,
                            snake_width: i16,
                            texture_creator: &sdl2::render::TextureCreator<sdl2::video::WindowContext>)
-        -> Box<sdl2::render::Texture>
+        -> sdl2::render::Texture
     {
         let head: sdl2::surface::Surface = sdl2::surface::Surface::new(tile_dimension,
                                                                        tile_dimension,
@@ -80,9 +78,7 @@ impl<'a> SnakeTextureManager<'a> {
             SNAKE_COLOR_LIGHT
         );
 
-        let new_texture = head_canvas.into_surface().as_texture(&texture_creator).unwrap();
-
-        Box::new(new_texture)
+        head_canvas.into_surface().as_texture(&texture_creator).unwrap()
     }
 
     pub fn draw_snake(&mut self,
