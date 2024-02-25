@@ -248,13 +248,19 @@ impl SDLContext<'_> {
     fn get_input(&mut self) -> InputType {
         for event in self.event_pump.poll_iter() {
             match event {
+
                 sdl2::event::Event::Quit { .. }
                 | sdl2::event::Event::KeyDown {
                     keycode: Some(sdl2::keyboard::Keycode::Escape),
                     ..
+                }
+                | sdl2::event::Event::KeyDown {
+                    keycode: Some(sdl2::keyboard::Keycode::Q),
+                    ..
                 } => {
                     return InputType::Quit;
                 }
+
                 sdl2::event::Event::KeyDown {
                     keycode: Some(sdl2::keyboard::Keycode::Q),
                     ..
