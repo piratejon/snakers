@@ -390,18 +390,60 @@ impl SDLContext<'_> {
         for i in 0..12 {
             let tx = cx + (i as u32 * (w + 20)) as i32;
             let ty = cy + h as i32 + 50;
+            let a = i as f64 * (360_f64 / 12_f64);
             self.canvas.copy_ex(&texs[0],
                                 None,
                                 sdl2::rect::Rect::new(tx, ty, w, h),
-                                i as f64 * (360_f64 / 12_f64),
+                                a,
                                 None,
                                 false,
                                 false);
 
-            self.canvas.filled_circle(tx as i16, ty as i16, 3, RED);
+            self.canvas.circle(tx as i16, ty as i16, 3, RED);
 
             self.canvas.filled_circle((tx + (w / 2) as i32) as i16, (ty + (h / 2) as i32) as i16, 3, BLUE);
+
+            // try to draw the rotated bounding box to prove we know how to find it
+            let bbrect = self.calculate_rotated_bounding_box_rect(tx as f64 + (w / 2) as f64,
+                                                                  ty as f64 + (h / 2) as f64,
+                                                                  w as f64 / 2.0,
+                                                                  a);
+
+            self.canvas.set_draw_color(BLUE);
+            self.canvas.draw_rect(bbrect);
         }
+    }
+
+    fn calculate_rotated_bounding_box_rect(&mut self,
+                                           x0: f64,
+                                           y0: f64,
+                                           r: f64,
+                                           angle: f64)
+        -> sdl2::rect::Rect
+    {
+
+        let angle = angle * std::f64::consts::PI / 180.0;
+        let (cos, sin) = (angle.cos(), angle.sin());
+        let (rc, rs) = (r * cos, r * sin);
+
+        // points in each quadrant
+        let q1 = ( rc - rs,  rs + rc);
+        let q2 = (-rc - rs, -rs + rc);
+        let q3 = (-rc + rs, -rs - rc);
+        let q4 = ( rc + rs,  rs - rc);
+
+        self.canvas.filled_circle((x0 + q1.0) as i16, (y0 + q1.1) as i16, 3, RED);
+        self.canvas.filled_circle((x0 + q2.0) as i16, (y0 + q2.1) as i16, 3, BLUE);
+        self.canvas.filled_circle((x0 + q3.0) as i16, (y0 + q3.1) as i16, 3, SNAKE_COLOR_DARK);
+        self.canvas.filled_circle((x0 + q4.0) as i16, (y0 + q4.1) as i16, 3, BLACK);
+
+        let mut pts = vec![q1,q2,q3,q4];
+        let x = *pts.iter().map(|p| p.0 as i32).collect::<Vec<_>>().iter().min().unwrap();
+        let y = *pts.iter().map(|p| p.1 as i32).collect::<Vec<_>>().iter().min().unwrap();
+        let w = *pts.iter().map(|p| p.0 as i32).collect::<Vec<_>>().iter().max().unwrap() - x;
+        let h = *pts.iter().map(|p| p.1 as i32).collect::<Vec<_>>().iter().max().unwrap() - y;
+
+        return sdl2::rect::Rect::new(x0 as i32 + x, y0 as i32 + y, w as u32, h as u32);
     }
 
     fn small_big_compare(&mut self) {
@@ -486,3 +528,4 @@ impl SDLContext<'_> {
         return true;
     }
 }
+
