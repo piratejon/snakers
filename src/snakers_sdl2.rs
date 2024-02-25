@@ -26,9 +26,9 @@ const HEIGHT: u32 = HEIGHT_PIXELS / GAME_TO_PIXEL;
 const FRAMES_PER_SECOND: f64 = 30.0;
 const FRAME_DURATION: std::time::Duration = std::time::Duration::from_nanos((1_000_000_000.0 / FRAMES_PER_SECOND) as u64);
 
-const RATE_LIMITED: bool = false;
+const RATE_LIMITED: bool = true;
 
-const TICKS_PER_SECOND: f64 = 4.0;
+const TICKS_PER_SECOND: f64 = 0.5;
 const TICK_DURATION: std::time::Duration = std::time::Duration::from_nanos((1_000_000_000.0 / TICKS_PER_SECOND) as u64);
 
 const FOOD_COLOR: sdl2::pixels::Color = sdl2::pixels::Color::RGB(200, 200, 20);

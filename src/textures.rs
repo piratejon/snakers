@@ -7,6 +7,8 @@ use snake::GameState;
 
 const SNAKE_COLOR_LIGHT: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 200, 50, 255);
 const SNAKE_COLOR_DARK: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 150, 60, 255);
+const RED: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(255, 0, 0, 255);
+const BLUE: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 0, 255, 255);
 
 pub struct SnakeTextureManager<'a> {
     head: sdl2::render::Texture<'a>,
@@ -16,6 +18,7 @@ pub struct SnakeTextureManager<'a> {
     tile_margin: u32,
 
     snake_width: i16,
+    half_snake_width_f64: f64,
 }
 
 impl<'a> SnakeTextureManager<'a> {
@@ -36,16 +39,18 @@ impl<'a> SnakeTextureManager<'a> {
 
             tile_dimension: tile_dimension,
             tile_margin: tile_margin,
+
             snake_width: snake_width,
+            half_snake_width_f64: snake_width as f64 / 2.0,
         };
     }
 
-    fn get_direction_angle(direction: &snake::Direction) -> i16 {
+    fn get_direction_angle(direction: &snake::Direction) -> f64 {
         match direction {
-            Direction::Up => 270,
-            Direction::Right => 0,
-            Direction::Down => 90,
-            Direction::Left => 180,
+            Direction::Up => 270.0,
+            Direction::Right => 0.0,
+            Direction::Down => 90.0,
+            Direction::Left => 180.0,
         }
     }
 
@@ -131,54 +136,52 @@ impl<'a> SnakeTextureManager<'a> {
                                 canvas: &mut sdl2::render::Canvas<sdl2::video::Window>)
     {
         let pt: (usize, usize) = game.game_to_grid_tuple(&at.coord.as_tuple());
-        let pt_px: (i32, i32) = (pt.0 as i32 * self.tile_dimension as i32, pt.1 as i32 * self.tile_dimension as i32);
+
+        let pt_px: (i32, i32) = (pt.0 as i32 * self.tile_dimension as i32,
+                                 pt.1 as i32 * self.tile_dimension as i32);
 
         // let partial_px: i32 = (self.tile_dimension as f64 * frame_percent) as i32;
 
         // calculate angle
         let target_angle = Self::get_direction_angle(&at.dir_next);
+
         let incoming_angle = match prev {
             Some(d) => Self::get_direction_angle(&d.dir_next),
-            _ => target_angle
+            _       => target_angle
         };
 
-        let radius = self.snake_width as f64 / 2_f64;
-
         // angle of forward direction
-        let mut forward_angle = incoming_angle as f64 + ((target_angle - incoming_angle) as f64 * frame_percent);
-
-        // clamp the angle
-        while forward_angle >= 360.0 {
-            forward_angle = forward_angle - 360.0;
-        }
-        while forward_angle < 0.0 {
-            forward_angle = forward_angle + 360.0;
-        }
-
-        // let (cx, cy) = (rotated_surface.width() / 2, rotated_surface.height() / 2);
-
-        let mut theta_prime = forward_angle + 180.0;
-
-        while theta_prime >= 360.0 {
-            theta_prime = theta_prime - 360.0;
-        }
-        while theta_prime < 0.0 {
-            theta_prime = theta_prime + 360.0;
-        }
+        let forward_angle = incoming_angle + ((target_angle - incoming_angle) * frame_percent);
 
         // find target root point in grid
-        let (tx, ty) = (radius * forward_angle.sin(), radius * forward_angle.cos());
+        let (tx, ty) = (self.half_snake_width_f64 * forward_angle.sin(),
+                        self.half_snake_width_f64 * forward_angle.cos());
 
         // translate rotated surface root point to grid
         let (sx, sy) = (pt_px.0 - tx as i32, pt_px.1 - ty as i32);
 
-        canvas.copy_ex(&self.head, // texture
-                       None,       // src rect -- None = entire texture
+        canvas.copy_ex(&self.head,    // texture
+                       None,          // src rect -- None = entire texture
                        sdl2::rect::Rect::new(sx, sy, self.tile_dimension, self.tile_dimension), // dst rect
                        forward_angle, // angle of rotation
                        None,          // center for rotation -- None = dst (or src if dst None)
                        false,         // flip_horizontal
                        false);        // flip_vertical
+
+        let rect = sdl2::rect::Rect::new (
+            pt_px.0 as i32 + self.tile_margin as i32,
+            pt_px.1 as i32 + self.tile_margin as i32,
+            self.snake_width as u32,
+            self.snake_width as u32,
+        );
+
+        if incoming_angle == target_angle {
+            canvas.set_draw_color(BLUE);
+        } else {
+            canvas.set_draw_color(RED);
+        }
+
+        let _ = canvas.draw_rect(rect);
     }
 
     fn draw_animated_snake_bit (&mut self,

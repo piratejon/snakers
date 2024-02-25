@@ -80,8 +80,8 @@ impl Coord {
     }
 }
 
-const INITIAL_SNAKE_LENGTH: i32 = 5;
-const SNAKE_GROWTH_PER_FOOD: i32 = 1;
+const INITIAL_SNAKE_LENGTH: i32 = 6;
+const SNAKE_GROWTH_PER_FOOD: i32 = 3;
 
 #[derive(Debug, PartialEq)]
 pub enum ItemType {
