@@ -178,7 +178,10 @@ impl<'a> SnakeTextureManager<'a> {
 
         canvas.copy_ex(&self.head,        // texture
                        None,              // src rect -- None = entire texture
-                       sdl2::rect::Rect::new(sx, sy, self.tile_dimension, self.tile_dimension), // dst rect
+                       sdl2::rect::Rect::new(sx + self.tile_margin as i32,
+                                             sy + self.tile_margin as i32,
+                                             self.snake_width as u32,
+                                             self.snake_width as u32), // dst rect
                        forward_angle_deg, // angle of rotation
                        None,              // center for rotation -- None = dst (or src if dst None)
                        false,             // flip_horizontal
