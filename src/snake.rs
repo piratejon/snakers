@@ -78,6 +78,18 @@ impl Coord {
     pub fn as_tuple(&self) -> (i32, i32) {
         (self.x, self.y)
     }
+
+    pub fn calculate_neighbor(&self,
+                              direction: Direction)
+        -> Coord
+    {
+        let uv = direction.direction_get_unit_vector();
+
+        Coord {
+            x: self.x + uv.x,
+            y: self.y + uv.y,
+        }
+    }
 }
 
 const INITIAL_SNAKE_LENGTH: i32 = 6;
@@ -96,7 +108,7 @@ pub enum ItemType {
 pub struct CoordWithDirection {
     pub dir_next: Direction,
     pub coord: Coord,
-    pub dir_prev: Option<Direction>,
+    pub dir_prev: Direction,
 }
 
 impl CoordWithDirection {
@@ -279,12 +291,9 @@ impl GameState {
 
                 let head = self.snake.body.front_mut().unwrap(); // all snakes have a head
 
-                // if there is no dir_prev we can update to any direction
-                // if there is a dir_prev, we cannot update to that direction
-
                 head.dir_next = match input.get_direction() {
                     Some(d) => {
-                        if Some(d) != head.dir_prev {
+                        if d != head.dir_prev {
                             d
                         } else {
                             head.dir_next
@@ -336,7 +345,7 @@ impl GameState {
     fn advance_head(&mut self, new_head: &mut CoordWithDirection) {
         // advance the head
         let old_head = self.snake.body.front_mut().unwrap();
-        old_head.dir_next = new_head.dir_prev.expect("head has elements behind it").get_opposite();
+        old_head.dir_next = new_head.dir_prev.get_opposite();
         let coord = old_head.coord.clone();
         self[&coord] = ItemType::SnakeBit;
 
@@ -350,7 +359,6 @@ impl GameState {
 
         let new_tail: &mut CoordWithDirection = self.snake.body.back_mut().unwrap();
         let coord = new_tail.coord.clone();
-        new_tail.dir_prev = None;
         self[&coord] = ItemType::SnakeTail;
     }
 
@@ -400,22 +408,18 @@ impl GameState {
 
             println!("init snake: x: {}, y: {}", at.x, at.y);
 
-            let dir_next: Direction = Direction::Up;
-            let mut dir_prev: Option<Direction> = Some(Direction::Down);
-
             if y == 0 {
                 self[&at] = ItemType::SnakeHead;
             } else if y < (INITIAL_SNAKE_LENGTH - 1) {
                 self[&at] = ItemType::SnakeBit;
             } else {
                 self[&at] = ItemType::SnakeTail;
-                dir_prev = None;
             }
 
             self.snake.body.push_back(CoordWithDirection {
-                dir_next: dir_next,
+                dir_next: Direction::Up,
                 coord: at,
-                dir_prev: dir_prev,
+                dir_prev: Direction::Down,
             });
         }
     }
@@ -447,32 +451,25 @@ impl GameState {
 
     fn try_create_target(&self, a: &CoordWithDirection) -> Option<CoordWithDirection> {
 
-        let d = a.dir_next;
+        let target = a.coord.calculate_neighbor(a.dir_next);
 
-        let uv = d.direction_get_unit_vector();
-
-        let new_x = a.coord.x + uv.x;
-        let new_y = a.coord.y + uv.y;
-
-        let target = Coord { x: new_x, y: new_y };
-
-        if new_x >= self.xrange.0 {
-            if new_x <= self.xrange.1 {
-                if new_y >= self.yrange.0 {
-                    if new_y <= self.yrange.1 {
-                        let out = CoordWithDirection {
-                            dir_next: d,
-                            coord: target,
-                            dir_prev: Some(a.dir_next.get_opposite()),
-                        };
-                        // println!("created target {:?} from {:?}+{:?}", target, a, d);
-                        return Some(out);
+        if target.x >= self.xrange.0 {
+            if target.x <= self.xrange.1 {
+                if target.y >= self.yrange.0 {
+                    if target.y <= self.yrange.1 {
+                        return Some(
+                            CoordWithDirection {
+                                dir_next: a.dir_next,
+                                coord: target,
+                                dir_prev: a.dir_next.get_opposite(),
+                            }
+                        )
                     }
                 }
             }
         }
 
-        println!("failed to create target from {:?} and {:?}: {}", a, d, target);
+        println!("failed to create target from {:?} and {:?}: {}", a, a.dir_next, target);
 
         None
     }

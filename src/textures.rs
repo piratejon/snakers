@@ -14,13 +14,15 @@ const WHITE: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(255, 255, 255, 255)
 
 pub struct SnakeTextureManager<'a> {
     head: sdl2::render::Texture<'a>,
-    bits: std::collections::LinkedList<sdl2::surface::Surface<'a>>,
+    // bits: std::collections::LinkedList<sdl2::surface::Surface<'a>>,
+    bit: sdl2::render::Texture<'a>,
 
     tile_dimension: u32,
     tile_margin: u32,
 
     snake_width: i16,
     half_snake_width_f64: f64,
+    half_snake_width_normalized: f64,
 }
 
 impl<'a> SnakeTextureManager<'a> {
@@ -34,7 +36,8 @@ impl<'a> SnakeTextureManager<'a> {
 
         return SnakeTextureManager {
             head: Self::create_head_texture(tile_dimension, snake_width, texture_creator),
-            bits: std::collections::LinkedList::new(),
+            bit: Self::create_body_texture(tile_dimension, snake_width, texture_creator),
+                // std::collections::LinkedList::new(),
             // tail: sdl2::surface::Surface::new(tile_dimension, tile_dimension, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap(),
 
             tile_dimension: tile_dimension,
@@ -42,6 +45,7 @@ impl<'a> SnakeTextureManager<'a> {
 
             snake_width: snake_width,
             half_snake_width_f64: snake_width as f64 / 2.0,
+            half_snake_width_normalized: (snake_width as f64 / 2.0) / tile_dimension as f64,
         };
     }
 
@@ -52,6 +56,37 @@ impl<'a> SnakeTextureManager<'a> {
             Direction::Down => 90.0,
             Direction::Left => 180.0,
         }
+    }
+
+    // draw a body textrue facing right (angle 0) and no partial/adjustment
+    fn create_body_texture(tile_dimension: u32,
+                           snake_width: i16,
+                           texture_creator: &sdl2::render::TextureCreator<sdl2::video::WindowContext>)
+        -> sdl2::render::Texture
+    {
+        let body: sdl2::surface::Surface = sdl2::surface::Surface::new(tile_dimension,
+                                                                       tile_dimension,
+                                                                       sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+
+        let mut body_canvas = body.into_canvas().unwrap();
+
+        // transparent background
+        // body_canvas.set_draw_color(sdl2::pixels::Color::RGBA(255,0,0,128));
+        body_canvas.set_draw_color(sdl2::pixels::Color::RGBA(0,0,0,0));
+        body_canvas.clear();
+
+        body_canvas.set_draw_color(SNAKE_COLOR_LIGHT);
+
+        body_canvas.fill_rect(
+            sdl2::rect::Rect::new(
+                0,
+                ((tile_dimension - snake_width as u32) / 2) as i32,
+                tile_dimension as u32,
+                snake_width as u32
+            ),
+        );
+
+        body_canvas.into_surface().as_texture(&texture_creator).unwrap()
     }
 
     // draw the head facing right (angle 0) and no partial/adjustment
@@ -84,6 +119,132 @@ impl<'a> SnakeTextureManager<'a> {
         head_canvas.into_surface().as_texture(&texture_creator).unwrap()
     }
 
+    fn draw_partial_snake_bit(&self,
+                              node:       &CoordWithDirection,
+                              src_offset: f64,
+                              size:       f64,
+                              dst_offset: f64,
+                              dst_node:   &CoordWithDirection,
+                              game:       &snake::GameState,
+                              canvas:     &mut sdl2::render::Canvas<sdl2::video::Window>)
+    {
+        let size_px = (size * self.tile_dimension as f64) as u32;
+
+        let src_rect = sdl2::rect::Rect::new(
+            (src_offset * self.tile_dimension as f64) as i32,
+            0,
+            size_px,
+            self.tile_dimension);
+
+        let is_corner = node.dir_prev != node.dir_next.get_opposite();
+
+        if is_corner {
+        } else {
+            let pt: (usize, usize) = game.game_to_grid_tuple(&dst_node.coord.as_tuple());
+
+            let pt: (i32, i32) = (pt.0 as i32 * self.tile_dimension as i32,
+                                  pt.1 as i32 * self.tile_dimension as i32);
+
+            let dst_rect = sdl2::rect::Rect::new(
+                pt.0 + (dst_offset * self.tile_dimension as f64) as i32,
+                pt.1,
+                size_px,
+                self.tile_dimension);
+
+            let dir = dst_node.dir_next;
+            let angle = Self::get_direction_angle(&dir);
+
+            let dst_rect = rotate_rect(&dst_rect, &dir);
+
+            canvas.copy_ex(&self.bit,         // texture
+                           src_rect,          // src rect
+                           dst_rect,          // dst rect
+                           angle, // angle of rotation
+                           None,              // center for rotation -- None = dst (or src if dst None)
+                           false,             // flip_horizontal
+                           false);            // flip_vertical
+        }
+    }
+
+    /*
+     * draw_snake_bit
+     *
+     * draw one unit of snake (1.0). this is one grid unit's worth of snake, but it can span upto
+     * two (partial) grids. this is because it is lagged on the path by half_snake_width_normalized
+     * and advanced by frame_percent. this is the usual case -- a given "bit" of snake is only
+     * rendered within a single grid square when half_snake_width_normalized is equal to
+     * frame_percent. in a given frame, all snake bits are rendered with the same frame_percent,
+     * and each bit has the directional information for the previous and next bits, so it should
+     * not matter what order the snake is iterated for rendering.
+     *
+     * */
+    fn draw_snake_bit(&self,
+                      frame_percent: f64,
+                      game:          &snake::GameState,
+                      bit:           &CoordWithDirection, // to be drawn
+                      prev:          &CoordWithDirection, // already drawn
+                      next:          Option<&CoordWithDirection>, // drawn next
+                      canvas:        &mut sdl2::render::Canvas<sdl2::video::Window>)
+    {
+        let start_percent = frame_percent - self.half_snake_width_normalized;
+        let end_percent = start_percent + 1.0;
+
+        if start_percent < 0.0 {
+
+            // to previous grid: [0, -start_percent) -> [1.0 + start_percent, 1.0)
+            self.draw_partial_snake_bit(
+                bit,
+                0.0,
+                -start_percent,
+                1.0 + start_percent,
+                prev,
+                game,
+                canvas);
+
+            // to current grid: [-start_percent, 1.0) -> [0, end_percent)
+            self.draw_partial_snake_bit(
+                bit,
+                -start_percent,
+                end_percent,
+                0.0,
+                bit,
+                game,
+                canvas);
+
+        } else {
+            // to current grid: [0, 1.0 - start_percent)  -> [start_percent, 1.0)
+            self.draw_partial_snake_bit(
+                bit,
+                0.0,
+                1.0 - start_percent,
+                start_percent,
+                bit,
+                game,
+                canvas);
+
+            let next_ = CoordWithDirection {
+                dir_next: bit.dir_next,
+                coord: bit.coord.calculate_neighbor(bit.dir_next),
+                dir_prev: bit.dir_prev,
+            };
+
+            let next = match next {
+                Some(node) => node,
+                None => &next_,
+            };
+
+            // to previous grid: [1.0 - start_percent, 1.0) -> [0, start_percent)
+            self.draw_partial_snake_bit(
+                bit,
+                1.0 - start_percent,
+                start_percent,
+                0.0,
+                next,
+                game,
+                canvas);
+        }
+    }
+
     pub fn draw_snake(&mut self,
                       frame_percent: f64,
                       game: &snake::GameState,
@@ -97,22 +258,24 @@ impl<'a> SnakeTextureManager<'a> {
             let mut prev = head;
             let next_bit = iter.next();
 
-            self.draw_animated_snake_head(frame_percent, game, head, next_bit, canvas);
+            // self.draw_animated_snake_head(frame_percent, game, head, next_bit, canvas);
 
             match next_bit {
                 Some(bit) => {
                     let mut cur = bit;
                     for following in iter {
                         // middle
-                        self.draw_animated_snake_bit(frame_percent, game, cur, prev, Some(&following), canvas);
+                        self.draw_snake_bit(frame_percent, game, cur, prev, Some(&following), canvas);
                         prev = cur;
                         cur = following;
                     }
                     // tail
-                    self.draw_animated_snake_bit(frame_percent, game, cur, prev, None, canvas);
+                    self.draw_snake_bit(frame_percent, game, cur, prev, None, canvas);
                 },
                 None => (),
             }
+        } else {
+            panic!("headless snake!");
         }
     }
 
@@ -140,10 +303,7 @@ impl<'a> SnakeTextureManager<'a> {
         // calculate angle
         let target_direction = at.dir_next;
 
-        let incoming_direction = match at.dir_prev {
-            Some(d) => d.get_opposite(),
-            _       => target_direction,
-        };
+        let incoming_direction = at.dir_prev.get_opposite();
 
         let target_angle_deg: f64 = Self::get_direction_angle(&target_direction);
         let incoming_angle_deg: f64 = Self::get_direction_angle(&incoming_direction);
@@ -257,7 +417,7 @@ impl<'a> SnakeTextureManager<'a> {
                 self.snake_width as u32,
                 partial_px as u32,
             );
-            let rotated = rotate_rect(&c_px, &rect, &at.dir_next);
+            let rotated = rotate_rect_old(&c_px, &rect, &at.dir_next);
             canvas.set_draw_color(SNAKE_COLOR_LIGHT);
             let _ = canvas.fill_rect(rotated);
         }
@@ -271,7 +431,7 @@ impl<'a> SnakeTextureManager<'a> {
                 self.snake_width as u32,
                 partial_px as u32,
             );
-            let rotated = rotate_rect(&c_px, &rect, &at.dir_next);
+            let rotated = rotate_rect_old(&c_px, &rect, &at.dir_next);
             canvas.set_draw_color(SNAKE_COLOR_LIGHT);
             let _ = canvas.draw_rect(rotated);
         }
@@ -289,7 +449,7 @@ impl<'a> SnakeTextureManager<'a> {
                 self.snake_width as u32,
                 one_minus_partial_px as u32,
             );
-            let rotated = rotate_rect(&c_px, &rect, &at.dir_next);
+            let rotated = rotate_rect_old(&c_px, &rect, &at.dir_next);
             canvas.set_draw_color(SNAKE_COLOR_LIGHT);
             let _ = canvas.draw_rect(rotated);
             // self.canvas.set_draw_color(RED); let _ = self.canvas.draw_rect(rotated);
@@ -297,7 +457,22 @@ impl<'a> SnakeTextureManager<'a> {
     }
 }
 
-fn rotate_rect(center: &(i32, i32), rect: &sdl2::rect::Rect, direction: &Direction) -> sdl2::rect::Rect {
+fn rotate_rect(rect: &sdl2::rect::Rect,
+               direction: &Direction)
+    -> sdl2::rect::Rect
+{
+    match direction {
+        Direction::Right | Direction::Left => rect.clone(),
+        Direction::Down | Direction::Up => sdl2::rect::Rect::new(
+            rect.x + rect.w - rect.h,
+            rect.y + rect.h - rect.w,
+            rect.h as u32,
+            rect.w as u32,
+        ),
+    }
+}
+
+fn rotate_rect_old(center: &(i32, i32), rect: &sdl2::rect::Rect, direction: &Direction) -> sdl2::rect::Rect {
 
     // rotation is CCW
     let matrix = direction.rotation_matrix();
