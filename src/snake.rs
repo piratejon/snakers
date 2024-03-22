@@ -92,7 +92,7 @@ impl Coord {
     }
 }
 
-const INITIAL_SNAKE_LENGTH: i32 = 6;
+const INITIAL_SNAKE_LENGTH: i32 = 7;
 const SNAKE_GROWTH_PER_FOOD: i32 = 3;
 
 #[derive(Debug, PartialEq)]
@@ -403,7 +403,7 @@ impl GameState {
     }
 
     fn initialize_snake(&mut self) {
-        for y in 0..INITIAL_SNAKE_LENGTH {
+        for y in (self.yrange.1 - INITIAL_SNAKE_LENGTH + 0) .. self.yrange.1 {
             let at = Coord { x: 0, y: y };
 
             println!("init snake: x: {}, y: {}", at.x, at.y);

@@ -65,7 +65,8 @@ fn main() {
         event_pump: &mut sdl_context.event_pump().unwrap(),
     };
 
-    ctx.bezier_test();
+    // ctx.bezier_test();
+    ctx.small_big_compare();
 
     while ctx.get_input() {
         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -447,7 +448,7 @@ impl SDLContext<'_> {
     }
 
     fn small_big_compare(&mut self) {
-        // self.canvas.set_draw_color(sdl2::pixels::Color::RGB(self.color_index, 64, 255 - self.color_index));
+        // self.canvas.set_draw_color(sdl1::pixels::Color::RGB(self.color_index, 64, 255 - self.color_index));
         self.canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
         self.canvas.clear();
 
