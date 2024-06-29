@@ -27,6 +27,13 @@ pub struct SnakeTextureManager<'a> {
     half_snake_width_normalized: f64,
 }
 
+#[derive(PartialEq)]
+enum DirectionKind {
+    Straight,
+    Clockwise,
+    Anticlockwise,
+}
+
 impl<'a> SnakeTextureManager<'a> {
     pub fn new(tile_dimension: u32,
                tile_margin: u32,
@@ -312,27 +319,56 @@ impl<'a> SnakeTextureManager<'a> {
         let target_angle_deg: f64 = Self::get_direction_angle(&target_direction);
         let incoming_angle_deg: f64 = Self::get_direction_angle(&incoming_direction);
 
+
+        // with respect to the center rather than the previous grid
+        let incoming_angle_deg: f64 = Self::get_direction_angle(&incoming_direction.get_opposite());
+
+        // incoming point
+        canvas.filled_circle((p.0 as f64 + (self.half_snake_width_f64 * incoming_angle_deg.to_radians().cos())) as i16,
+                             (p.1 as f64 + (self.half_snake_width_f64 * incoming_angle_deg.to_radians().sin())) as i16,
+                             3,
+                             RED);
+
         // exiting point
         canvas.filled_circle((p.0 as f64 + (self.half_snake_width_f64 * target_angle_deg.to_radians().cos())) as i16,
                              (p.1 as f64 + (self.half_snake_width_f64 * target_angle_deg.to_radians().sin())) as i16,
                              3,
                              SNAKE_COLOR_DARK);
 
-        // with respect to the center rather than the previous grid
-        let incoming_angle_deg: f64 = Self::get_direction_angle(&incoming_direction.get_opposite());
+        let average = (target_angle_deg - incoming_angle_deg) / 2.0;
+
+        let direction_kind = match (incoming_direction, target_direction) {
+            (snake::Direction::Up, snake::Direction::Right) => DirectionKind::Anticlockwise,
+            (snake::Direction::Up, snake::Direction::Left) => DirectionKind::Clockwise,
+            (snake::Direction::Down, snake::Direction::Left) => DirectionKind::Anticlockwise,
+            (snake::Direction::Down, snake::Direction::Right) => DirectionKind::Clockwise,
+            (snake::Direction::Left, snake::Direction::Up) => DirectionKind::Anticlockwise,
+            (snake::Direction::Left, snake::Direction::Down) => DirectionKind::Clockwise,
+            (snake::Direction::Right, snake::Direction::Down) => DirectionKind::Anticlockwise,
+            (snake::Direction::Right, snake::Direction::Right) => DirectionKind::Clockwise,
+            _ => DirectionKind::Straight,
+        };
 
         // is this a straight line or angle?
         let diff_deg = (target_angle_deg - incoming_angle_deg).abs();
         if diff_deg == 180.0 {
             // straight line
         } else {
-            // angle
-            let average = (incoming_angle_deg - target_angle_deg) / 2.0;
-            let corner = (p.0 as f64 + (self.tile_dimension as f64 / 2.0 * average.to_radians().cos()),
-                          p.1 as f64 + (self.tile_dimension as f64 / 2.0 * average.to_radians().sin()));
+            let mut angle_to_corner = ((incoming_angle_deg - target_angle_deg) / 2.0) + target_angle_deg;
+            if incoming_angle_deg < target_angle_deg {
+                angle_to_corner = angle_to_corner + 180.0;
+            }
+            if direction_kind == DirectionKind::Clockwise {
+                angle_to_corner = angle_to_corner + 180.0;
+            }
+            if angle_to_corner > 360.0 {
+                angle_to_corner = angle_to_corner - 360.0;
+            }
+            let corner = (p.0 as f64 + (self.tile_dimension as f64 / 2.0 * angle_to_corner.to_radians().cos()),
+                          p.1 as f64 + (self.tile_dimension as f64 / 2.0 * angle_to_corner.to_radians().sin()));
             // canvas.draw_line(sdl2::rect::Point::new(corner.0 as i32, corner.1 as i32), sdl2::rect::Point::new(p.0 as i32, p.1 as i32));
-            canvas.arc(corner.0 as i16, corner.1 as i16, self.tile_dimension as i16 / 2, average as i16 - 45, average as i16 + 45, BLUE);
             canvas.filled_circle(corner.0 as i16, corner.1 as i16, 3, ORANGE);
+            // canvas.arc(corner.0 as i16, corner.1 as i16, self.tile_dimension as i16 / 2, angle_to_corner as i16 - 45, angle_to_corner as i16 + 45, BLUE);
         }
 
         // angle of forward direction
@@ -348,7 +384,7 @@ impl<'a> SnakeTextureManager<'a> {
             _   => incoming_angle_deg + ((target_angle_deg - incoming_angle_deg) * frame_percent),
         };
 
-        println!("{:?}: {}; {:?}: {}; {:?}", incoming_direction, incoming_angle_deg, target_direction, target_angle_deg, forward_angle_deg);
+        println!("In={:?}:{}; Out={:?}:{}; fwd={:?}; avg={:?}", incoming_direction, incoming_angle_deg, target_direction, target_angle_deg, forward_angle_deg, average);
 
         // find target root point in grid
         let (tx, ty) = (frame_percent * self.half_snake_width_f64 * forward_angle_deg.to_radians().cos(),
@@ -363,11 +399,6 @@ impl<'a> SnakeTextureManager<'a> {
         // let (tx, ty) = (self.half_snake_width_f64 * incoming_angle_deg.to_radians().cos(),
         //                 self.half_snake_width_f64 * incoming_angle_deg.to_radians().sin());
 
-        // incoming point
-        canvas.filled_circle((p.0 as f64 + (self.half_snake_width_f64 * incoming_angle_deg.to_radians().cos())) as i16,
-                             (p.1 as f64 + (self.half_snake_width_f64 * incoming_angle_deg.to_radians().sin())) as i16,
-                             3,
-                             RED);
     }
 
     fn draw_snake_bit_simple(&self,
