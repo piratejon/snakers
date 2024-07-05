@@ -1,7 +1,7 @@
 use string_builder::Builder;
 use std::time::Duration;
 
-use snake::*;
+use snakers::game::*;
 
 use crossterm::event::{read, poll, Event, KeyCode, KeyEvent};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -10,7 +10,7 @@ const WIDTH : u32 = 48;
 const HEIGHT : u32 = 18;
 
 fn main() {
-  let mut game = snake::GameState::new(WIDTH, HEIGHT);
+  let mut game = GameState::new(WIDTH, HEIGHT);
 
   loop {
     draw(game.get_world());

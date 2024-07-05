@@ -138,16 +138,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
-name = "prj"
-version = "0.1.0"
-dependencies = [
- "crossterm",
- "rand",
- "sdl2",
- "string-builder",
-]
-
-[[package]]
 name = "rand"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -251,6 +241,31 @@ name = "smallvec"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6ecd384b10a64542d77071bd64bd7b231f4ed5940fba55e98c3de13824cf3d7"
+
+[[package]]
+name = "snakers"
+version = "0.1.0"
+dependencies = [
+ "rand",
+]
+
+[[package]]
+name = "snakers-cli"
+version = "0.1.0"
+dependencies = [
+ "crossterm",
+ "rand",
+ "snakers",
+ "string-builder",
+]
+
+[[package]]
+name = "snakers-sdl2"
+version = "0.1.0"
+dependencies = [
+ "sdl2",
+ "snakers",
+]
 
 [[package]]
 name = "string-builder"

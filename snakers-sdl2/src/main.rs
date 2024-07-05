@@ -4,14 +4,14 @@ use sdl2::gfx::primitives::DrawRenderer;
 
 mod textures;
 
-use crate::textures::SnakeTextureManager;
+use textures::SnakeTextureManager;
 
-use ::snake::InputType;
-use ::snake::ItemType;
-use ::snake::GameState;
+use snakers::game::InputType;
+use snakers::game::ItemType;
+use snakers::game::GameState;
 // use ::snake::CoordWithDirection;
-use ::snake::Direction;
-use ::snake::StateTransition;
+use snakers::game::Direction;
+use snakers::game::StateTransition;
 
 const WIDTH_PIXELS: u32 = 1200;
 const HEIGHT_PIXELS: u32 = 750;

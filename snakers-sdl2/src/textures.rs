@@ -1,6 +1,8 @@
 
 use sdl2::gfx::primitives::DrawRenderer;
 
+use snakers::game as snake;
+
 use snake::Direction;
 use snake::CoordWithDirection;
 use snake::GameState;
