@@ -1,5 +1,5 @@
 pub mod game;
-mod direction;
+pub mod direction;
 mod pair;
 mod coord;
 pub mod inputtype;

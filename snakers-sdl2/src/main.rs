@@ -6,12 +6,9 @@ mod textures;
 
 use textures::SnakeTextureManager;
 
-use snakers::game::InputType;
-use snakers::game::ItemType;
-use snakers::game::GameState;
-// use ::snake::CoordWithDirection;
-use snakers::game::Direction;
-use snakers::game::StateTransition;
+use snakers::game::*;
+use snakers::direction::Direction;
+use snakers::inputtype::InputType;
 
 const WIDTH_PIXELS: u32 = 1200;
 const HEIGHT_PIXELS: u32 = 750;

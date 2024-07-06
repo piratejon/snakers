@@ -1,11 +1,9 @@
 
 use sdl2::gfx::primitives::DrawRenderer;
 
-use snakers::game as snake;
-
-use snake::Direction;
-use snake::CoordWithDirection;
-use snake::GameState;
+use snakers::direction::Direction;
+use snakers::game::CoordWithDirection;
+use snakers::game::GameState;
 
 const SNAKE_COLOR_LIGHT: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 200, 50, 255);
 const SNAKE_COLOR_DARK: sdl2::pixels::Color = sdl2::pixels::Color::RGBA(0, 150, 60, 255);
@@ -60,7 +58,7 @@ impl<'a> SnakeTextureManager<'a> {
         };
     }
 
-    fn get_direction_angle(direction: &snake::Direction) -> f64 {
+    fn get_direction_angle(direction: &Direction) -> f64 {
         match direction {
             Direction::Up => 270.0,
             Direction::Right => 0.0,
@@ -150,7 +148,7 @@ impl<'a> SnakeTextureManager<'a> {
                               size:       f64,
                               dst_offset: f64,
                               dst_node:   &CoordWithDirection,
-                              game:       &snake::GameState,
+                              game:       &GameState,
                               canvas:     &mut sdl2::render::Canvas<sdl2::video::Window>,
                               color:      sdl2::pixels::Color)
     {
@@ -214,7 +212,7 @@ impl<'a> SnakeTextureManager<'a> {
      * */
     fn draw_snake_bit(&self,
                       frame_percent: f64,
-                      game:          &snake::GameState,
+                      game:          &GameState,
                       bit:           &CoordWithDirection, // to be drawn
                       prev:          &CoordWithDirection, // already drawn
                       next:          Option<&CoordWithDirection>, // drawn next
@@ -296,7 +294,7 @@ impl<'a> SnakeTextureManager<'a> {
     // just draw the center of the path for the grid
     fn draw_snake_path(&self,
                       frame_percent: f64,
-                      game:          &snake::GameState,
+                      game:          &GameState,
                       bit:           &CoordWithDirection, // to be drawn
                       prev:          &CoordWithDirection, // already drawn
                       next:          Option<&CoordWithDirection>, // drawn next
@@ -340,14 +338,14 @@ impl<'a> SnakeTextureManager<'a> {
         let average = (target_angle_deg - incoming_angle_deg) / 2.0;
 
         let direction_kind = match (incoming_direction, target_direction) {
-            (snake::Direction::Up, snake::Direction::Right) => DirectionKind::Anticlockwise,
-            (snake::Direction::Up, snake::Direction::Left) => DirectionKind::Clockwise,
-            (snake::Direction::Down, snake::Direction::Left) => DirectionKind::Anticlockwise,
-            (snake::Direction::Down, snake::Direction::Right) => DirectionKind::Clockwise,
-            (snake::Direction::Left, snake::Direction::Up) => DirectionKind::Anticlockwise,
-            (snake::Direction::Left, snake::Direction::Down) => DirectionKind::Clockwise,
-            (snake::Direction::Right, snake::Direction::Down) => DirectionKind::Anticlockwise,
-            (snake::Direction::Right, snake::Direction::Right) => DirectionKind::Clockwise,
+            (Direction::Up, Direction::Right) => DirectionKind::Anticlockwise,
+            (Direction::Up, Direction::Left) => DirectionKind::Clockwise,
+            (Direction::Down, Direction::Left) => DirectionKind::Anticlockwise,
+            (Direction::Down, Direction::Right) => DirectionKind::Clockwise,
+            (Direction::Left, Direction::Up) => DirectionKind::Anticlockwise,
+            (Direction::Left, Direction::Down) => DirectionKind::Clockwise,
+            (Direction::Right, Direction::Down) => DirectionKind::Anticlockwise,
+            (Direction::Right, Direction::Right) => DirectionKind::Clockwise,
             _ => DirectionKind::Straight,
         };
 
@@ -376,10 +374,10 @@ impl<'a> SnakeTextureManager<'a> {
         // angle of forward direction
         let forward_angle_deg: f64 = match (incoming_direction, target_direction) {
             // rotate special cases in correct direction
-            (snake::Direction::Up, snake::Direction::Right)
+            (Direction::Up, Direction::Right)
                 => incoming_angle_deg + ((360.0 - incoming_angle_deg) * frame_percent),
 
-            (snake::Direction::Right, snake::Direction::Up)
+            (Direction::Right, Direction::Up)
                 => 360.0 + ((target_angle_deg - 360.0) * frame_percent),
 
             // general case rotates in correct direction
@@ -405,7 +403,7 @@ impl<'a> SnakeTextureManager<'a> {
 
     fn draw_snake_bit_simple(&self,
                              frame_percent: f64,
-                             game:          &snake::GameState,
+                             game:          &GameState,
                              bit:           &CoordWithDirection, // to be drawn
                              prev:          &CoordWithDirection, // already drawn
                              next:          Option<&CoordWithDirection>, // drawn next
@@ -429,7 +427,7 @@ impl<'a> SnakeTextureManager<'a> {
 
     pub fn draw_snake(&mut self,
                       frame_percent: f64,
-                      game: &snake::GameState,
+                      game: &GameState,
                       canvas: &mut sdl2::render::Canvas<sdl2::video::Window>)
     {
         canvas.set_draw_color(SNAKE_COLOR_LIGHT);
@@ -503,10 +501,10 @@ impl<'a> SnakeTextureManager<'a> {
         // angle of forward direction
         let forward_angle_deg: f64 = match (incoming_direction, target_direction) {
             // rotate special cases in correct direction
-            (snake::Direction::Up, snake::Direction::Right)
+            (Direction::Up, Direction::Right)
                 => incoming_angle_deg + ((360.0 - incoming_angle_deg) * frame_percent),
 
-            (snake::Direction::Right, snake::Direction::Up)
+            (Direction::Right, Direction::Up)
                 => 360.0 + ((target_angle_deg - 360.0) * frame_percent),
 
             // general case rotates in correct direction
