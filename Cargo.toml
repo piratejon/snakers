@@ -2,6 +2,6 @@
 members = [
   "snakers",
   "snakers-cli",
-  "snakers-sdl2",
+  #"snakers-sdl2",
 ]
 resolver = "2"
