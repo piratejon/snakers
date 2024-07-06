@@ -2,6 +2,7 @@ use string_builder::Builder;
 use std::time::Duration;
 
 use snakers::game::*;
+use snakers::inputtype::InputType;
 
 use crossterm::event::{read, poll, Event, KeyCode, KeyEvent};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};

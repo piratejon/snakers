@@ -3,6 +3,7 @@ use std::collections::LinkedList;
 use rand::Rng;
 
 use crate::direction::Direction;
+use crate::inputtype::InputType;
 use crate::coord::Coord;
 
 const INITIAL_SNAKE_LENGTH: i32 = 7;
@@ -392,28 +393,5 @@ impl std::ops::Index<&Coord> for GameState {
 impl std::ops::IndexMut<&Coord> for GameState {
     fn index_mut(&mut self, at: &Coord) -> &mut Self::Output {
         &mut self[&(at.x, at.y)]
-    }
-}
-
-// TODO use direction
-#[derive(PartialEq, Debug,Copy,Clone)]
-pub enum InputType {
-    Nothing,
-    Up,
-    Right,
-    Down,
-    Left,
-    Quit,
-}
-
-impl InputType {
-    fn get_direction(&self) -> Option<Direction> {
-        match self {
-            Self::Up => Some(Direction::Up),
-            Self::Right => Some(Direction::Right),
-            Self::Down => Some(Direction::Down),
-            Self::Left => Some(Direction::Left),
-            _ => None,
-        }
     }
 }
