@@ -14,6 +14,11 @@ const ROTATE_LEFT: ((i32, i32), (i32, i32)) = ((0, 1), (-1, 0));
 const ROTATE_DOWN: ((i32, i32), (i32, i32)) = ((-1, 0), (0, -1));
 const ROTATE_RIGHT: ((i32, i32), (i32, i32)) = ((0, -1), (1, 0));
 
+const UP: Coord = Coord { x: 0, y: -1 };
+const RIGHT: Coord = Coord { x: 1, y: 0 };
+const LEFT: Coord = Coord { x: -1, y: 0 };
+const DOWN: Coord = Coord { x: 0, y: 1 };
+
 impl Direction {
     pub fn rotation_matrix(&self) -> &((i32, i32), (i32, i32)) {
         match self {
@@ -47,10 +52,21 @@ impl Direction {
 
     pub fn direction_get_unit_vector(&self) -> Coord {
         match self {
-            Direction::Up => Coord::new(0, -1),
-            Direction::Right => Coord::new(1, 0),
-            Direction::Down => Coord::new(0, 1),
-            Direction::Left => Coord::new(-1, 0),
+            Direction::Up => UP,
+            Direction::Right => RIGHT,
+            Direction::Down => DOWN,
+            Direction::Left => LEFT,
+        }
+    }
+
+    pub fn direction_from_unit_vector(p: &Coord) -> Direction {
+        match p {
+            &UP => Direction::Up,
+            &RIGHT => Direction::Right,
+            &LEFT => Direction::Left,
+            &DOWN => Direction::Down,
+            _ => panic!(),
         }
     }
 }
+

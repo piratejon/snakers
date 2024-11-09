@@ -2,7 +2,7 @@ use std::ops::Sub;
 
 use crate::direction::Direction;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Pair<T: Copy> {
     pub x: T,
     pub y: T,
